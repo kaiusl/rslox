@@ -21,6 +21,18 @@ pub struct Vm {
     pub disassembler: Option<Disassembler>,
 }
 
+macro_rules! binary_op {
+    ($self:ident $op:tt) => {
+        let rhs = $self.stack.pop().unwrap();
+        let lhs = $self.stack.pop().unwrap();
+        match (lhs, rhs) {
+            (Value::Number(lhs), Value::Number(rhs)) => {
+                $self.stack.push(Value::Number(lhs $op rhs));
+            }
+        }
+    };
+}
+
 impl Vm {
     pub fn new() -> Vm {
         Vm {
@@ -80,6 +92,18 @@ impl Vm {
                             self.stack.push(Value::Number(-v));
                         }
                     }
+                }
+                OpCode::Add => {
+                    binary_op!(self+);
+                }
+                OpCode::Subtract => {
+                    binary_op!(self-);
+                }
+                OpCode::Multiply => {
+                    binary_op!(self*);
+                }
+                OpCode::Divide => {
+                    binary_op!(self/);
                 }
             }
         }

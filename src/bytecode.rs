@@ -98,16 +98,16 @@ impl ByteCursor {
     }
 }
 
-const OP_RETURN: u8 = 0;
-const OP_CONSTANT: u8 = 1;
-const OP_NEGATE: u8 = 2;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, num_derive::FromPrimitive)]
 #[repr(u8)]
 pub enum OpCode {
-    Return = OP_RETURN,
-    Constant = OP_CONSTANT,
-    Negate = OP_NEGATE,
+    Return,
+    Constant,
+    Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl OpCode {
@@ -116,18 +116,11 @@ impl OpCode {
     }
 
     pub fn from_u8(byte: u8) -> Self {
-        Self::try_from_u8(byte).unwrap()
+        num_traits::FromPrimitive::from_u8(byte).unwrap()
     }
 
-    pub fn try_from_u8(byte: u8) -> Result<Self, DisassemblerError> {
-        match byte {
-            OP_RETURN => Ok(OpCode::Return),
-            OP_CONSTANT => Ok(OpCode::Constant),
-            OP_NEGATE => Ok(OpCode::Negate),
-            _ => Err(DisassemblerError {
-                message: Cow::Borrowed("Unknown opcode"),
-            }),
-        }
+    pub fn try_from_u8(byte: u8) -> Option<Self> {
+        num_traits::FromPrimitive::from_u8(byte)
     }
 }
 
@@ -136,6 +129,10 @@ pub enum Instruction {
     Return,
     Constant(u8),
     Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl Instruction {
@@ -144,6 +141,10 @@ impl Instruction {
             Instruction::Return => OpCode::Return,
             Instruction::Constant(_) => OpCode::Constant,
             Instruction::Negate => OpCode::Negate,
+            Instruction::Add => OpCode::Add,
+            Instruction::Subtract => OpCode::Subtract,
+            Instruction::Multiply => OpCode::Multiply,
+            Instruction::Divide => OpCode::Divide,
         }
     }
 
@@ -151,7 +152,12 @@ impl Instruction {
         dst.push(self.op_code() as u8);
         // push operands
         match self {
-            Instruction::Return | Instruction::Negate => {}
+            Instruction::Return
+            | Instruction::Negate
+            | Instruction::Add
+            | Instruction::Subtract
+            | Instruction::Multiply
+            | Instruction::Divide => {}
             Instruction::Constant(idx) => {
                 dst.push(*idx);
             }
@@ -159,7 +165,7 @@ impl Instruction {
     }
 
     pub fn from_bytes(bytes: &mut ByteCursor) -> Result<Self, DisassemblerError> {
-        let instr = match bytes.u8().and_then(|b| OpCode::try_from_u8(b).ok()) {
+        let instr = match bytes.u8().and_then(|b| OpCode::try_from_u8(b)) {
             Some(OpCode::Return) => Instruction::Return,
             Some(OpCode::Constant) => match bytes.u8() {
                 Some(idx) => Instruction::Constant(idx),
@@ -170,6 +176,10 @@ impl Instruction {
                 }
             },
             Some(OpCode::Negate) => Instruction::Negate,
+            Some(OpCode::Add) => Instruction::Add,
+            Some(OpCode::Subtract) => Instruction::Subtract,
+            Some(OpCode::Multiply) => Instruction::Multiply,
+            Some(OpCode::Divide) => Instruction::Divide,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -182,7 +192,12 @@ impl Instruction {
 
     pub fn byte_len(&self) -> usize {
         1 + match self {
-            Instruction::Return | Instruction::Negate => 0,
+            Instruction::Return
+            | Instruction::Negate
+            | Instruction::Add
+            | Instruction::Subtract
+            | Instruction::Multiply
+            | Instruction::Divide => 0,
             Instruction::Constant(idx) => mem::size_of_val(idx),
         }
     }
@@ -194,6 +209,10 @@ impl fmt::Display for Instruction {
             Instruction::Return => write!(f, "RETURN"),
             Instruction::Constant(idx) => write!(f, "CONSTANT {}", idx),
             Instruction::Negate => write!(f, "NEGATE"),
+            Instruction::Add => write!(f, "ADD"),
+            Instruction::Subtract => write!(f, "SUBTRACT"),
+            Instruction::Multiply => write!(f, "MULTIPLY"),
+            Instruction::Divide => write!(f, "DIVIDE"),
         }
     }
 }
