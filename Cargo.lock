@@ -180,6 +180,7 @@ name = "rslox"
 version = "0.1.0"
 dependencies = [
  "miette",
+ "thiserror",
 ]
 
 [[package]]
