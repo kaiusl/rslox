@@ -37,12 +37,96 @@ impl ByteCode {
     }
 }
 
+impl AsRef<[u8]> for ByteCode {
+    fn as_ref(&self) -> &[u8] {
+        &self.code
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ByteCursor {
+    offset: usize,
+    instructions: Vec<u8>,
+}
+
+impl ByteCursor {
+    pub fn new(instructions: Vec<u8>) -> Self {
+        ByteCursor {
+            offset: 0,
+            instructions,
+        }
+    }
+
+    pub fn u8(&mut self) -> Option<u8> {
+        let result = self.instructions.get(self.offset).copied();
+        self.offset += 1;
+        result
+    }
+
+    pub fn u16(&mut self) -> Option<u16> {
+        const LEN: usize = std::mem::size_of::<u16>();
+        self.array::<LEN>().map(u16::from_le_bytes)
+    }
+
+    pub fn u32(&mut self) -> Option<u32> {
+        const LEN: usize = std::mem::size_of::<u32>();
+        self.array::<LEN>().map(u32::from_le_bytes)
+    }
+
+    #[inline]
+    fn array<const N: usize>(&mut self) -> Option<[u8; N]> {
+        let result = self
+            .instructions
+            .get(self.offset..)?
+            .first_chunk::<N>()
+            .copied()?;
+        self.offset += N;
+
+        Some(result)
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn len(&self) -> usize {
+        self.instructions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.offset >= self.instructions.len()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum OpCode {
-    Return,
-    Constant,
+    Return = 0,
+    Constant = 1,
 }
+
+impl OpCode {
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    pub fn from_u8(byte: u8) -> Self {
+        Self::try_from_u8(byte).unwrap()
+    }
+
+    pub fn try_from_u8(byte: u8) -> Result<Self, DisassemblerError> {
+        match byte {
+            0 => Ok(OpCode::Return),
+            1 => Ok(OpCode::Constant),
+            _ => Err(DisassemblerError {
+                message: Cow::Borrowed("Unknown opcode"),
+            }),
+        }
+    }
+}
+
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
@@ -69,30 +153,25 @@ impl Instruction {
         }
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> OpFromBytesResult<'_> {
-        let instr = match bytes.first() {
-            Some(&b) if b == OpCode::Return as u8 => Instruction::Return,
-            Some(&b) if b == OpCode::Constant as u8 => {
-                let idx = bytes[1];
-                Instruction::Constant(idx)
-            }
-            _ => {
-                return OpFromBytesResult {
-                    op: Err(DisassemblerError {
-                        message: Cow::Borrowed("Unknown opcode"),
-                    }),
-                    offset: 0,
-                    remainder: bytes,
+    pub fn from_bytes(bytes: &mut ByteCursor) -> Result<Self, DisassemblerError> {
+        let instr = match bytes.u8() {
+            Some(b) if b == OpCode::Return as u8 => Instruction::Return,
+            Some(b) if b == OpCode::Constant as u8 => match bytes.u8() {
+                Some(idx) => Instruction::Constant(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected constant index"),
+                    })
                 }
+            },
+            _ => {
+                return Err(DisassemblerError {
+                    message: Cow::Borrowed("Unknown opcode"),
+                });
             }
         };
 
-        let offset = instr.byte_len();
-        OpFromBytesResult {
-            op: Ok(instr),
-            offset,
-            remainder: &bytes[offset..],
-        }
+        Ok(instr)
     }
 
     pub fn byte_len(&self) -> usize {
@@ -113,8 +192,7 @@ impl fmt::Display for Instruction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpFromBytesResult<'a> {
+pub struct OpFromBytesResult {
     pub op: Result<Instruction, DisassemblerError>,
     pub offset: usize,
-    pub remainder: &'a [u8],
 }

@@ -1,20 +1,18 @@
 use std::borrow::Cow;
 
-use crate::bytecode::{ByteCode, Instruction};
+use crate::bytecode::{ByteCode, ByteCursor, Instruction};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Disassembler<'a> {
     pub bytecode: &'a ByteCode,
-    pub bytes: &'a [u8],
-    pub offset: usize,
+    pub cursor: ByteCursor,
 }
 
 impl Disassembler<'_> {
     pub fn new(bytecode: &ByteCode) -> Disassembler<'_> {
         Disassembler {
             bytecode,
-            bytes: &bytecode.code,
-            offset: 0,
+            cursor: ByteCursor::new(bytecode.code.clone()),
         }
     }
 
@@ -57,19 +55,14 @@ impl<'a> Iterator for Disassembler<'a> {
     type Item = Result<(usize, Instruction), DisassemblerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.bytes.is_empty() {
-            None
-        } else {
-            let result = Instruction::from_bytes(self.bytes);
-            self.bytes = result.remainder;
-            match result.op {
-                Ok(op) => {
-                    let ret = Some(Ok((self.offset, op)));
-                    self.offset += result.offset;
-                    ret
-                }
-                Err(err) => Some(Err(err)),
-            }
+        if self.cursor.is_empty() {
+            return None;
+        }
+        let offset = self.cursor.offset();
+        let result = Instruction::from_bytes(&mut self.cursor);
+        match result {
+            Ok(op) => Some(Ok((offset, op))),
+            Err(err) => Some(Err(err)),
         }
     }
 }
