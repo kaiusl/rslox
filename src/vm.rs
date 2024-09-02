@@ -73,6 +73,14 @@ impl Vm {
 
                     println!("{}", value);
                 }
+                OpCode::Negate => {
+                    let value = self.stack.pop().unwrap();
+                    match value {
+                        Value::Number(v) => {
+                            self.stack.push(Value::Number(-v));
+                        }
+                    }
+                }
             }
         }
 

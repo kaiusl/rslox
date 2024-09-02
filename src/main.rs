@@ -13,6 +13,7 @@ fn main() {
     let mut bytecode = ByteCode::new();
     let idx = bytecode.add_constant(Value::Number(1.2));
     bytecode.push(Instruction::Constant(idx as u8), Span::from_len(0, 0, 1));
+    bytecode.push(Instruction::Negate, Span::from_len(0, 1, 1));
     bytecode.push(Instruction::Return, Span::from_len(1, 2, 6));
 
     let disassembler = Disassembler::new(&bytecode);

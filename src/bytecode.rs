@@ -98,11 +98,16 @@ impl ByteCursor {
     }
 }
 
+const OP_RETURN: u8 = 0;
+const OP_CONSTANT: u8 = 1;
+const OP_NEGATE: u8 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum OpCode {
-    Return = 0,
-    Constant = 1,
+    Return = OP_RETURN,
+    Constant = OP_CONSTANT,
+    Negate = OP_NEGATE,
 }
 
 impl OpCode {
@@ -116,8 +121,9 @@ impl OpCode {
 
     pub fn try_from_u8(byte: u8) -> Result<Self, DisassemblerError> {
         match byte {
-            0 => Ok(OpCode::Return),
-            1 => Ok(OpCode::Constant),
+            OP_RETURN => Ok(OpCode::Return),
+            OP_CONSTANT => Ok(OpCode::Constant),
+            OP_NEGATE => Ok(OpCode::Negate),
             _ => Err(DisassemblerError {
                 message: Cow::Borrowed("Unknown opcode"),
             }),
@@ -129,6 +135,7 @@ impl OpCode {
 pub enum Instruction {
     Return,
     Constant(u8),
+    Negate,
 }
 
 impl Instruction {
@@ -136,6 +143,7 @@ impl Instruction {
         match self {
             Instruction::Return => OpCode::Return,
             Instruction::Constant(_) => OpCode::Constant,
+            Instruction::Negate => OpCode::Negate,
         }
     }
 
@@ -143,7 +151,7 @@ impl Instruction {
         dst.push(self.op_code() as u8);
         // push operands
         match self {
-            Instruction::Return => {}
+            Instruction::Return | Instruction::Negate => {}
             Instruction::Constant(idx) => {
                 dst.push(*idx);
             }
@@ -151,9 +159,9 @@ impl Instruction {
     }
 
     pub fn from_bytes(bytes: &mut ByteCursor) -> Result<Self, DisassemblerError> {
-        let instr = match bytes.u8() {
-            Some(b) if b == OpCode::Return as u8 => Instruction::Return,
-            Some(b) if b == OpCode::Constant as u8 => match bytes.u8() {
+        let instr = match bytes.u8().and_then(|b| OpCode::try_from_u8(b).ok()) {
+            Some(OpCode::Return) => Instruction::Return,
+            Some(OpCode::Constant) => match bytes.u8() {
                 Some(idx) => Instruction::Constant(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -161,7 +169,8 @@ impl Instruction {
                     })
                 }
             },
-            _ => {
+            Some(OpCode::Negate) => Instruction::Negate,
+            None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
                 });
@@ -173,7 +182,7 @@ impl Instruction {
 
     pub fn byte_len(&self) -> usize {
         1 + match self {
-            Instruction::Return => 0,
+            Instruction::Return | Instruction::Negate => 0,
             Instruction::Constant(idx) => mem::size_of_val(idx),
         }
     }
@@ -184,6 +193,7 @@ impl fmt::Display for Instruction {
         match self {
             Instruction::Return => write!(f, "RETURN"),
             Instruction::Constant(idx) => write!(f, "CONSTANT {}", idx),
+            Instruction::Negate => write!(f, "NEGATE"),
         }
     }
 }
