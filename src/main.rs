@@ -6,6 +6,7 @@ use self::value::Value;
 mod bytecode;
 mod common;
 mod disassembler;
+mod lexer;
 mod value;
 mod vm;
 
