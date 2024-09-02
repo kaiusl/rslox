@@ -1,34 +1,22 @@
 use self::bytecode::{ByteCode, Instruction};
 use self::common::Span;
+use self::compiler::Compiler;
 use self::disassembler::{Disassembler, DisassemblerError};
 use self::value::Value;
 
 mod bytecode;
 mod common;
+mod compiler;
 mod disassembler;
 mod lexer;
 mod value;
 mod vm;
 
 fn main() {
-    let span = Span::from_len(0, 0, 1);
-    let mut bytecode = ByteCode::new();
+    let input = "return 1 + 2;";
+    let compiler = Compiler::from_str(input);
 
-    let idx = bytecode.add_constant(Value::Number(1.2));
-    bytecode.push(Instruction::Constant(idx as u8), span.clone());
-
-    let idx = bytecode.add_constant(Value::Number(3.4));
-    bytecode.push(Instruction::Constant(idx as u8), span.clone());
-
-    bytecode.push(Instruction::Add, span.clone());
-
-    let idx = bytecode.add_constant(Value::Number(5.6));
-    bytecode.push(Instruction::Constant(idx as u8), span.clone());
-
-    bytecode.push(Instruction::Divide, span.clone());
-
-    bytecode.push(Instruction::Negate, span.clone());
-    bytecode.push(Instruction::Return, span.clone());
+    let bytecode = compiler.compile().unwrap();
 
     let disassembler = Disassembler::new(&bytecode);
     disassembler.print();
@@ -38,6 +26,6 @@ fn main() {
         println!("DEBUG_TRACE")
     }
 
-    let mut vm = vm::Vm::new();
-    vm.interpret(bytecode).unwrap();
+    let mut vm = vm::Vm::new(bytecode);
+    vm.run().unwrap();
 }

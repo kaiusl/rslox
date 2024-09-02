@@ -22,11 +22,11 @@ pub struct Vm {
 }
 
 impl Vm {
-    pub fn new() -> Vm {
+    pub fn new(bytecode: ByteCode) -> Vm {
         Vm {
-            constants: Vec::new(),
-            spans: HashMap::new(),
-            instructions: BytesCursor::new(Vec::new()),
+            constants: bytecode.constants,
+            spans: bytecode.spans,
+            instructions: BytesCursor::new(bytecode.code),
             stack: Stack::new(),
 
             #[cfg(feature = "debug_trace")]
@@ -34,19 +34,7 @@ impl Vm {
         }
     }
 
-    pub fn interpret(&mut self, bytecode: ByteCode) -> Result<(), InterpretError> {
-        #[cfg(feature = "debug_trace")]
-        {
-            self.disassembler = Some(Disassembler::new(&bytecode));
-        }
-        self.constants = bytecode.constants;
-        self.spans = bytecode.spans;
-        self.instructions = BytesCursor::new(bytecode.code);
-
-        self.run()
-    }
-
-    fn run(&mut self) -> Result<(), InterpretError> {
+    pub fn run(&mut self) -> Result<(), InterpretError> {
         while let Some(op) = self.instructions.u8().map(OpCode::from_u8) {
             #[cfg(feature = "debug_trace")]
             {
