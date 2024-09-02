@@ -10,6 +10,72 @@ pub use error::*;
 
 use crate::common::{Span, Spanned};
 
+pub struct PeekableLexer<'a> {
+    lexer: Lexer<'a>,
+    peeked: Option<Result<Spanned<Token<'a>>, LexerError<'a>>>,
+    line: usize,
+}
+
+impl<'a> PeekableLexer<'a> {
+    pub fn new(lexer: Lexer<'a>) -> Self {
+        Self {
+            lexer,
+            peeked: None,
+            line: 0,
+        }
+    }
+
+    pub fn peek(&mut self) -> Option<&Result<Spanned<Token<'a>>, LexerError<'a>>> {
+        if self.peeked.is_none() {
+            self.peeked = self.lexer.next();
+        }
+        self.peeked.as_ref()
+    }
+
+    pub fn next_if<F>(&mut self, f: F) -> Option<Result<Spanned<Token<'a>>, LexerError<'a>>>
+    where
+        F: Fn(&Token<'a>) -> bool,
+    {
+        if let Some(peeked) = self.peek().and_then(|res| res.as_ref().ok()) {
+            if f(peeked) {
+                self.line = self.lexer.line();
+                return self.peeked.take();
+            }
+        }
+        None
+    }
+
+    pub fn is_next<F>(&mut self, f: F) -> bool
+    where
+        F: Fn(&Token<'a>) -> bool,
+    {
+        if let Some(peeked) = self.peek().and_then(|res| res.as_ref().ok()) {
+            f(peeked)
+        } else {
+            false
+        }
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+}
+
+impl<'a> Iterator for PeekableLexer<'a> {
+    type Item = Result<Spanned<Token<'a>>, LexerError<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = if self.peeked.is_some() {
+            self.peeked.take()
+        } else {
+            self.lexer.next()
+        };
+        self.line = self.lexer.line();
+
+        result
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Chars<'a> {
     input: &'a str,
