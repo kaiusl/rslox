@@ -32,7 +32,7 @@ impl ByteCode {
         (self.constants.len() - 1)
     }
 
-    pub fn disassemble(&self) -> Disassembler<'_> {
+    pub fn disassemble(&self) -> Disassembler {
         Disassembler::new(self)
     }
 }
@@ -124,9 +124,6 @@ impl OpCode {
         }
     }
 }
-
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {

@@ -9,3 +9,7 @@ thiserror = "1.0.63"
 
 [lints.rust]
 rust_2018_idioms = "forbid"
+
+[features]
+debug_trace = []
+default = ["debug_trace"]

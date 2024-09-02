@@ -1,31 +1,41 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use crate::bytecode::{ByteCode, ByteCursor, Instruction};
+use crate::common::Span;
+use crate::value::Value;
 
 #[derive(Debug, Clone)]
-pub struct Disassembler<'a> {
-    pub bytecode: &'a ByteCode,
+pub struct Disassembler {
+    pub constants: Vec<Value>,
+    pub spans: HashMap<usize, Span>,
     pub cursor: ByteCursor,
+    pub prev_line: Option<usize>,
 }
 
-impl Disassembler<'_> {
-    pub fn new(bytecode: &ByteCode) -> Disassembler<'_> {
+impl Disassembler {
+    pub fn new(bytecode: &ByteCode) -> Disassembler {
         Disassembler {
-            bytecode,
+            constants: bytecode.constants.clone(),
+            spans: bytecode.spans.clone(),
             cursor: ByteCursor::new(bytecode.code.clone()),
+            prev_line: None,
         }
     }
 
-    pub fn print(self) {
-        let constants = &self.bytecode.constants;
-        let spans = &self.bytecode.spans;
-        let mut prev_line = None;
-        for result in self {
+    pub fn print(mut self) {
+        while !self.cursor.is_empty() {
+            self.print_next();
+        }
+    }
+
+    pub fn print_next(&mut self) {
+        if let Some(result) = self.next() {
             match result {
                 Ok((offset, op)) => {
-                    let line = &spans[&offset].line;
+                    let line = self.spans[&offset].line;
                     'print_line: {
-                        if let Some(prev_line) = prev_line {
+                        if let Some(prev_line) = self.prev_line {
                             if prev_line == line {
                                 print!("   |");
                                 break 'print_line;
@@ -34,11 +44,11 @@ impl Disassembler<'_> {
 
                         print!("{:04}", line);
                     }
-                    prev_line = Some(line);
+                    self.prev_line = Some(line);
                     print!(" {:04} {}", offset, op);
                     match op {
                         Instruction::Constant(idx) => {
-                            print!(" ({})", &constants[idx as usize]);
+                            print!(" ({})", &self.constants[idx as usize]);
                         }
                         _ => {}
                     }
@@ -51,7 +61,7 @@ impl Disassembler<'_> {
     }
 }
 
-impl<'a> Iterator for Disassembler<'a> {
+impl Iterator for Disassembler {
     type Item = Result<(usize, Instruction), DisassemblerError>;
 
     fn next(&mut self) -> Option<Self::Item> {

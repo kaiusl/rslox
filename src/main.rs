@@ -18,6 +18,11 @@ fn main() {
     let disassembler = Disassembler::new(&bytecode);
     disassembler.print();
 
+    #[cfg(feature = "debug_trace")]
+    {
+        println!("DEBUG_TRACE")
+    }
+
     let mut vm = vm::Vm::new();
     vm.interpret(bytecode).unwrap();
 }
