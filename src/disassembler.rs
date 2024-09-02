@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use crate::bytecode::{ByteCode, ByteCursor, Instruction};
+use crate::bytecode::{ByteCode, BytesCursor, Instruction};
 use crate::common::Span;
 use crate::value::Value;
 
@@ -9,7 +9,7 @@ use crate::value::Value;
 pub struct Disassembler {
     pub constants: Vec<Value>,
     pub spans: HashMap<usize, Span>,
-    pub cursor: ByteCursor,
+    pub cursor: BytesCursor,
     pub prev_line: Option<usize>,
 }
 
@@ -18,7 +18,7 @@ impl Disassembler {
         Disassembler {
             constants: bytecode.constants.clone(),
             spans: bytecode.spans.clone(),
-            cursor: ByteCursor::new(bytecode.code.clone()),
+            cursor: BytesCursor::new(bytecode.code.clone()),
             prev_line: None,
         }
     }
@@ -30,33 +30,31 @@ impl Disassembler {
     }
 
     pub fn print_next(&mut self) {
-        if let Some(result) = self.next() {
-            match result {
-                Ok((offset, op)) => {
-                    let line = self.spans[&offset].line;
-                    'print_line: {
-                        if let Some(prev_line) = self.prev_line {
-                            if prev_line == line {
-                                print!("   |");
-                                break 'print_line;
-                            }
-                        }
+        let Some(result) = self.next() else { return };
 
-                        print!("{:04}", line);
-                    }
-                    self.prev_line = Some(line);
-                    print!(" {:04} {}", offset, op);
-                    match op {
-                        Instruction::Constant(idx) => {
-                            print!(" ({})", &self.constants[idx as usize]);
+        match result {
+            Ok((offset, op)) => {
+                let line = self.spans[&offset].line;
+                'print_line: {
+                    if let Some(prev_line) = self.prev_line {
+                        if prev_line == line {
+                            print!("   |");
+                            break 'print_line;
                         }
-                        _ => {}
                     }
 
-                    println!();
+                    print!("{:04}", line);
                 }
-                Err(err) => println!("Error: '{}'", err.message),
+                self.prev_line = Some(line);
+
+                print!(" {:04} {}", offset, op);
+                if let Instruction::Constant(idx) = op {
+                    print!(" ({})", &self.constants[idx as usize]);
+                }
+
+                println!();
             }
+            Err(err) => println!("Error: '{}'", err.message),
         }
     }
 }

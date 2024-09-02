@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::bytecode::{ByteCode, ByteCursor, OpCode};
+use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
-use crate::disassembler::{self, Disassembler};
+use crate::disassembler::Disassembler;
 use crate::value::Value;
 
 use self::error::InterpretError;
@@ -14,23 +14,11 @@ type Stack<T> = Vec<T>;
 pub struct Vm {
     pub constants: Vec<Value>,
     pub spans: HashMap<usize, Span>,
-    pub instructions: ByteCursor,
+    pub instructions: BytesCursor,
     pub stack: Stack<Value>,
 
     #[cfg(feature = "debug_trace")]
     pub disassembler: Option<Disassembler>,
-}
-
-macro_rules! binary_op {
-    ($self:ident $op:tt) => {
-        let rhs = $self.stack.pop().unwrap();
-        let lhs = $self.stack.pop().unwrap();
-        match (lhs, rhs) {
-            (Value::Number(lhs), Value::Number(rhs)) => {
-                $self.stack.push(Value::Number(lhs $op rhs));
-            }
-        }
-    };
 }
 
 impl Vm {
@@ -38,7 +26,7 @@ impl Vm {
         Vm {
             constants: Vec::new(),
             spans: HashMap::new(),
-            instructions: ByteCursor::new(Vec::new()),
+            instructions: BytesCursor::new(Vec::new()),
             stack: Stack::new(),
 
             #[cfg(feature = "debug_trace")]
@@ -53,7 +41,7 @@ impl Vm {
         }
         self.constants = bytecode.constants;
         self.spans = bytecode.spans;
-        self.instructions = ByteCursor::new(bytecode.code);
+        self.instructions = BytesCursor::new(bytecode.code);
 
         self.run()
     }
@@ -93,21 +81,44 @@ impl Vm {
                         }
                     }
                 }
-                OpCode::Add => {
-                    binary_op!(self+);
-                }
-                OpCode::Subtract => {
-                    binary_op!(self-);
-                }
-                OpCode::Multiply => {
-                    binary_op!(self*);
-                }
-                OpCode::Divide => {
-                    binary_op!(self/);
-                }
+                OpCode::Add => self.binary_arithmetic_op(Self::add),
+                OpCode::Subtract => self.binary_arithmetic_op(Self::subtract),
+                OpCode::Multiply => self.binary_arithmetic_op(Self::multiply),
+                OpCode::Divide => self.binary_arithmetic_op(Self::divide),
             }
         }
 
         Ok(())
+    }
+
+    #[inline]
+    fn binary_arithmetic_op(&mut self, op: impl Fn(f64, f64) -> f64) {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        match (lhs, rhs) {
+            (Value::Number(lhs), Value::Number(rhs)) => {
+                self.stack.push(Value::Number(op(lhs, rhs)));
+            }
+        }
+    }
+
+    #[inline]
+    fn add(lhs: f64, rhs: f64) -> f64 {
+        lhs + rhs
+    }
+
+    #[inline]
+    fn subtract(lhs: f64, rhs: f64) -> f64 {
+        lhs - rhs
+    }
+
+    #[inline]
+    fn multiply(lhs: f64, rhs: f64) -> f64 {
+        lhs * rhs
+    }
+
+    #[inline]
+    fn divide(lhs: f64, rhs: f64) -> f64 {
+        lhs / rhs
     }
 }

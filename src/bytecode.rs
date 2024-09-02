@@ -29,7 +29,7 @@ impl ByteCode {
 
     pub fn add_constant(&mut self, value: Value) -> usize {
         self.constants.push(value);
-        (self.constants.len() - 1)
+        self.constants.len() - 1
     }
 
     pub fn disassemble(&self) -> Disassembler {
@@ -37,21 +37,15 @@ impl ByteCode {
     }
 }
 
-impl AsRef<[u8]> for ByteCode {
-    fn as_ref(&self) -> &[u8] {
-        &self.code
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct ByteCursor {
+pub struct BytesCursor {
     offset: usize,
     instructions: Vec<u8>,
 }
 
-impl ByteCursor {
+impl BytesCursor {
     pub fn new(instructions: Vec<u8>) -> Self {
-        ByteCursor {
+        BytesCursor {
             offset: 0,
             instructions,
         }
@@ -111,10 +105,6 @@ pub enum OpCode {
 }
 
 impl OpCode {
-    pub fn as_u8(self) -> u8 {
-        self as u8
-    }
-
     pub fn from_u8(byte: u8) -> Self {
         num_traits::FromPrimitive::from_u8(byte).unwrap()
     }
@@ -164,8 +154,8 @@ impl Instruction {
         }
     }
 
-    pub fn from_bytes(bytes: &mut ByteCursor) -> Result<Self, DisassemblerError> {
-        let instr = match bytes.u8().and_then(|b| OpCode::try_from_u8(b)) {
+    pub fn from_bytes(bytes: &mut BytesCursor) -> Result<Self, DisassemblerError> {
+        let instr = match bytes.u8().and_then(OpCode::try_from_u8) {
             Some(OpCode::Return) => Instruction::Return,
             Some(OpCode::Constant) => match bytes.u8() {
                 Some(idx) => Instruction::Constant(idx),
