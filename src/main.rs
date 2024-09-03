@@ -12,7 +12,7 @@ mod value;
 mod vm;
 
 fn main() -> Result<()> {
-    let input = "!(5 - 4 > 3 * 2 == !nil)";
+    let input = r#""st" + "ri" + "ng""#;
     let compiler = Compiler::from_str(input);
 
     let bytecode = compiler.compile()?;

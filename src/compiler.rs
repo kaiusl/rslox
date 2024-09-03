@@ -1,7 +1,7 @@
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token};
-use crate::value::Value;
+use crate::value::{Object, Value};
 
 use num_traits::FromPrimitive;
 
@@ -176,6 +176,10 @@ impl<'a> Compiler<'a> {
             Token::Keyword(Keyword::Nil) => Ok(self.emit(Instruction::Nil, prefix.span)),
             Token::Keyword(Keyword::True) => Ok(self.emit(Instruction::True, prefix.span)),
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
+            Token::String { value, .. } => self.compile_constant(
+                Value::new_object(Object::String(value.to_string())),
+                prefix.span,
+            ),
             _ => unreachable!("Invalid prefix operator."),
         }
     }
@@ -187,6 +191,7 @@ impl<'a> Compiler<'a> {
                 | Token::LParen
                 | Token::Minus
                 | Token::Bang
+                | Token::String { .. }
                 | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False)
         )
     }
@@ -200,6 +205,10 @@ impl<'a> Compiler<'a> {
             Token::LParen,
             Token::Minus,
             Token::Bang,
+            Token::String {
+                lexeme: "",
+                value: "",
+            },
             Token::Keyword(Keyword::Nil),
             Token::Keyword(Keyword::True),
             Token::Keyword(Keyword::False),

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::Disassembler;
-use crate::value::Value;
+use crate::value::{Object, Value};
 
 use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
 
@@ -93,7 +94,7 @@ impl<'a> Vm<'a> {
                         }
                     }
                 }
-                OpCode::Add => self.binary_arithmetic_op(Self::add_number)?,
+                OpCode::Add => self.run_binary_add()?,
                 OpCode::Subtract => self.binary_arithmetic_op(Self::subtract_number)?,
                 OpCode::Multiply => self.binary_arithmetic_op(Self::multiply_number)?,
                 OpCode::Divide => self.binary_arithmetic_op(Self::divide_number)?,
@@ -125,6 +126,53 @@ impl<'a> Vm<'a> {
                 OpCode::True => self.stack.push(Value::Bool(true)),
                 OpCode::False => self.stack.push(Value::Bool(false)),
             }
+        }
+
+        Ok(())
+    }
+
+    fn run_binary_add(&mut self) -> Result<(), InterpretError<'a>> {
+        let this = &mut *self;
+        let op = Self::add_number;
+        let rhs = this.stack.pop();
+        let lhs = this.stack.pop();
+        match (lhs, rhs) {
+            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
+                this.stack.push(Value::Number(op(lhs, rhs)));
+            }
+            (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => {
+                match (lhs.borrow().deref(), rhs.borrow().deref()) {
+                    (Object::String(lhs), Object::String(rhs)) => {
+                        let new = lhs.clone() + rhs;
+                        this.stack.push(Value::new_object(Object::String(new)));
+                    }
+                    _ => {
+                        todo!()
+                    }
+                }
+            }
+            (Some(lhs), Some(rhs)) => {
+                this.stack.push(lhs);
+                this.stack.push(rhs);
+                let kind = RuntimeErrorKind::InvalidOperands {
+                    expected: "two numbers or string",
+                };
+                return Err(this.runtime_error(kind, 1));
+            }
+            (None, Some(rhs)) => {
+                this.stack.push(rhs);
+                let kind = RuntimeErrorKind::MissingOperand {
+                    expected: "two numbers or string",
+                };
+                return Err(this.runtime_error(kind, 1));
+            }
+            (None, None) => {
+                let kind = RuntimeErrorKind::MissingOperand {
+                    expected: "two numbers or string",
+                };
+                return Err(this.runtime_error(kind, 1));
+            }
+            (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
         }
 
         Ok(())
