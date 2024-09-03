@@ -12,7 +12,7 @@ mod value;
 mod vm;
 
 fn main() -> Result<()> {
-    let input = "true + nil";
+    let input = "!!1";
     let compiler = Compiler::from_str(input);
 
     let bytecode = compiler.compile()?;

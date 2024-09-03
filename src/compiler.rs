@@ -111,6 +111,7 @@ impl<'a> Compiler<'a> {
 
         match operator.item {
             Token::Minus => self.emit(Instruction::Negate, operator.span),
+            Token::Bang => self.emit(Instruction::Not, operator.span),
             _ => unreachable!("Invalid unary operator."),
         }
 
@@ -162,7 +163,7 @@ impl<'a> Compiler<'a> {
         match prefix.item {
             Token::Number { value, .. } => self.compile_constant(Value::Number(value), prefix.span),
             Token::LParen => self.compile_grouping(prefix),
-            Token::Minus => self.compile_unary(prefix),
+            Token::Minus | Token::Bang => self.compile_unary(prefix),
             Token::Keyword(Keyword::Nil) => Ok(self.emit(Instruction::Nil, prefix.span)),
             Token::Keyword(Keyword::True) => Ok(self.emit(Instruction::True, prefix.span)),
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
@@ -176,6 +177,7 @@ impl<'a> Compiler<'a> {
             Token::Number { .. }
                 | Token::LParen
                 | Token::Minus
+                | Token::Bang
                 | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False)
         )
     }
@@ -188,6 +190,7 @@ impl<'a> Compiler<'a> {
             },
             Token::LParen,
             Token::Minus,
+            Token::Bang,
             Token::Keyword(Keyword::Nil),
             Token::Keyword(Keyword::True),
             Token::Keyword(Keyword::False),
@@ -202,6 +205,7 @@ impl<'a> Compiler<'a> {
             },
             Token::LParen,
             Token::Minus,
+            Token::Bang,
             Token::Plus,
             Token::Slash,
             Token::Star,

@@ -25,6 +25,10 @@ impl Value {
             Err(self)
         }
     }
+
+    pub fn is_falsey(&self) -> bool {
+        matches!(self, Value::Nil | Value::Bool(false))
+    }
 }
 
 impl fmt::Display for Value {

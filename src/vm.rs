@@ -81,6 +81,18 @@ impl<'a> Vm<'a> {
                         }
                     }
                 }
+                OpCode::Not => {
+                    let value = self.stack.pop();
+                    match value {
+                        Some(value) => {
+                            self.stack.push(Value::Bool(value.is_falsey()));
+                        }
+                        None => {
+                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
+                            return Err(self.runtime_error(kind, 1));
+                        }
+                    }
+                }
                 OpCode::Add => self.binary_arithmetic_op(Self::add)?,
                 OpCode::Subtract => self.binary_arithmetic_op(Self::subtract)?,
                 OpCode::Multiply => self.binary_arithmetic_op(Self::multiply)?,

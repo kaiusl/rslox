@@ -105,6 +105,7 @@ pub enum OpCode {
     Nil,
     True,
     False,
+    Not,
 }
 
 impl OpCode {
@@ -129,6 +130,7 @@ pub enum Instruction {
     Nil,
     True,
     False,
+    Not,
 }
 
 impl Instruction {
@@ -144,6 +146,7 @@ impl Instruction {
             Instruction::Nil => OpCode::Nil,
             Instruction::True => OpCode::True,
             Instruction::False => OpCode::False,
+            Instruction::Not => OpCode::Not,
         }
     }
 
@@ -159,7 +162,8 @@ impl Instruction {
             | Instruction::Divide
             | Instruction::Nil
             | Instruction::True
-            | Instruction::False => {}
+            | Instruction::False
+            | Instruction::Not => {}
             Instruction::Constant(idx) => {
                 dst.push(*idx);
             }
@@ -185,6 +189,7 @@ impl Instruction {
             Some(OpCode::Nil) => Instruction::Nil,
             Some(OpCode::True) => Instruction::True,
             Some(OpCode::False) => Instruction::False,
+            Some(OpCode::Not) => Instruction::Not,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -205,7 +210,8 @@ impl Instruction {
             | Instruction::Divide
             | Instruction::Nil
             | Instruction::True
-            | Instruction::False => 0,
+            | Instruction::False
+            | Instruction::Not => 0,
             Instruction::Constant(idx) => mem::size_of_val(idx),
         }
     }
@@ -224,6 +230,7 @@ impl fmt::Display for Instruction {
             Instruction::Nil => write!(f, "NIL"),
             Instruction::True => write!(f, "TRUE"),
             Instruction::False => write!(f, "FALSE"),
+            Instruction::Not => write!(f, "NOT"),
         }
     }
 }
