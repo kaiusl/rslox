@@ -111,6 +111,7 @@ pub enum OpCode {
     Lt,
     Print,
     Pop,
+    DefineGlobal,
 }
 
 impl OpCode {
@@ -141,6 +142,7 @@ pub enum Instruction {
     Lt,
     Print,
     Pop,
+    DefineGlobal(u8),
 }
 
 impl Instruction {
@@ -162,6 +164,7 @@ impl Instruction {
             Instruction::Lt => OpCode::Lt,
             Instruction::Print => OpCode::Print,
             Instruction::Pop => OpCode::Pop,
+            Instruction::DefineGlobal(_) => OpCode::DefineGlobal,
         }
     }
 
@@ -184,7 +187,8 @@ impl Instruction {
             | Instruction::Lt
             | Instruction::Print
             | Instruction::Pop => {}
-            Instruction::Constant(idx) => {
+
+            Instruction::Constant(idx) | Instruction::DefineGlobal(idx) => {
                 dst.push(*idx);
             }
         }
@@ -215,6 +219,14 @@ impl Instruction {
             Some(OpCode::Lt) => Instruction::Lt,
             Some(OpCode::Print) => Instruction::Print,
             Some(OpCode::Pop) => Instruction::Pop,
+            Some(OpCode::DefineGlobal) => match bytes.u8() {
+                Some(idx) => Instruction::DefineGlobal(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected global index"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -242,7 +254,7 @@ impl Instruction {
             | Instruction::Lt
             | Instruction::Print
             | Instruction::Pop => 0,
-            Instruction::Constant(idx) => mem::size_of_val(idx),
+            Instruction::Constant(idx) | Instruction::DefineGlobal(idx) => mem::size_of_val(idx),
         }
     }
 }
@@ -266,6 +278,7 @@ impl fmt::Display for Instruction {
             Instruction::Lt => write!(f, "LT"),
             Instruction::Print => write!(f, "PRINT"),
             Instruction::Pop => write!(f, "POP"),
+            Instruction::DefineGlobal(idx) => write!(f, "DEFINE_GLOBAL {}", idx),
         }
     }
 }

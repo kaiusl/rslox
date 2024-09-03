@@ -12,8 +12,7 @@ mod value;
 mod vm;
 
 fn main() -> Result<()> {
-    let input = r#"print 10 + ;
-print ;"#;
+    let input = r#"var b = 10; var a = 5;"#;
     let compiler = Compiler::from_str(input);
 
     let bytecode = compiler.compile()?;

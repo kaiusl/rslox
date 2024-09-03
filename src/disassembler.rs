@@ -48,7 +48,7 @@ impl Disassembler {
                 self.prev_line = Some(line);
 
                 print!(" {:04} {}", offset, op);
-                if let Instruction::Constant(idx) = op {
+                if let Instruction::Constant(idx) | Instruction::DefineGlobal(idx) = op {
                     print!(" ({})", &self.constants[idx as usize]);
                 }
 

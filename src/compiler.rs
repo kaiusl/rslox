@@ -53,12 +53,59 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
-        match self.compile_stmt() {
+        let result = match self.consume_if(|tok| matches!(tok, Token::Keyword(Keyword::Var)))? {
+            Some(tok) => self.compile_var_decl(tok),
+            None => self.compile_stmt(),
+        };
+
+        match result {
             Ok(()) => Ok(()),
             Err(err) => {
                 self.synchronize();
                 Err(err)
             }
+        }
+    }
+
+    fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        let const_idx = self.compile_variable_name()?;
+
+        if let Some(eq) = self.consume_if(|tok| matches!(tok, Token::Eq))? {
+            self.compile_expr()?;
+        } else {
+            self.emit(Instruction::Nil, var_kw.span.combine(&const_idx.span))
+        }
+
+        self.consume(
+            |token| matches!(token, Token::Semicolon),
+            || &[Token::Semicolon],
+        )?;
+
+        self.compile_define_variable(const_idx);
+
+        Ok(())
+    }
+
+    fn compile_define_variable(&mut self, name: Spanned<u8>) {
+        self.emit(Instruction::DefineGlobal(name.item), name.span);
+    }
+
+    fn compile_variable_name(&mut self) -> Result<Spanned<u8>, StaticError<'a>> {
+        let ident = self.consume(
+            |tok| matches!(tok, Token::Ident { .. }),
+            || &[Token::Ident("")],
+        )?;
+
+        match ident.item {
+            Token::Ident(s) => {
+                let result = self.compile_constant(
+                    Value::new_object(Object::String(InternedString::new(s.to_string()))),
+                    ident.span.clone(),
+                )?;
+
+                Ok(Spanned::new(result, ident.span))
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -101,7 +148,7 @@ impl<'a> Compiler<'a> {
 
         let Some(tok) = self.consume_if(|tok| matches!(tok, Token::Keyword(Keyword::Print)))?
         else {
-            todo!("expr stmt")
+            return self.compile_expr_stmt();
         };
 
         match tok.item {
@@ -190,7 +237,7 @@ impl<'a> Compiler<'a> {
         self.compile_precedence(Precedence::Assignment)
     }
 
-    fn compile_constant(&mut self, value: Value, span: Span) -> Result<(), StaticError<'a>> {
+    fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'a>> {
         let idx = self.bytecode.add_constant(value);
         let Ok(idx) = u8::try_from(idx) else {
             todo!("Too many constants. Add another op to support more constants.");
@@ -198,7 +245,7 @@ impl<'a> Compiler<'a> {
 
         self.emit(Instruction::Constant(idx), span);
 
-        Ok(())
+        Ok(idx)
     }
 
     fn compile_grouping(&mut self, lparen: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
@@ -273,16 +320,20 @@ impl<'a> Compiler<'a> {
 
     fn compile_prefix(&mut self, prefix: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         match prefix.item {
-            Token::Number { value, .. } => self.compile_constant(Value::Number(value), prefix.span),
+            Token::Number { value, .. } => self
+                .compile_constant(Value::Number(value), prefix.span)
+                .map(|_| ()),
             Token::LParen => self.compile_grouping(prefix),
             Token::Minus | Token::Bang => self.compile_unary(prefix),
             Token::Keyword(Keyword::Nil) => Ok(self.emit(Instruction::Nil, prefix.span)),
             Token::Keyword(Keyword::True) => Ok(self.emit(Instruction::True, prefix.span)),
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
-            Token::String { value, .. } => self.compile_constant(
-                Value::new_object(Object::String(InternedString::new(value.to_string()))),
-                prefix.span,
-            ),
+            Token::String { value, .. } => self
+                .compile_constant(
+                    Value::new_object(Object::String(InternedString::new(value.to_string()))),
+                    prefix.span,
+                )
+                .map(|_| ()),
             _ => unreachable!("Invalid prefix operator."),
         }
     }

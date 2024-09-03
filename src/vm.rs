@@ -21,6 +21,7 @@ pub struct Vm<'a> {
     pub instructions: BytesCursor,
     pub stack: Stack<Value>,
     pub strings: HashSet<InternedString>,
+    pub globals: HashMap<InternedString, Value>,
 
     #[cfg(feature = "debug_trace")]
     pub disassembler: Disassembler,
@@ -38,6 +39,7 @@ impl<'a> Vm<'a> {
             instructions: BytesCursor::new(bytecode.code),
             stack: Stack::new(),
             strings: HashSet::new(),
+            globals: HashMap::new(),
 
             #[cfg(feature = "debug_trace")]
             disassembler,
@@ -60,11 +62,8 @@ impl<'a> Vm<'a> {
             match op {
                 OpCode::Return => {
                     let value = self.stack.pop();
-                    match value {
-                        Some(value) => {
-                            println!("RET: {}", value);
-                        }
-                        None => {}
+                    if let Some(value) = value {
+                        println!("RET: {}", value);
                     }
                 }
                 OpCode::Constant => {
@@ -87,8 +86,37 @@ impl<'a> Vm<'a> {
                         }
                     }
                     self.stack.push(value.clone());
+                }
+                OpCode::DefineGlobal => {
+                    let index = self.instructions.u8().unwrap();
+                    let value = &self.constants[index as usize];
 
-                    println!("{}", value);
+                    let name = if let Value::Object(obj) = value {
+                        match obj.borrow_mut().deref_mut() {
+                            Object::String(s) => {
+                                match self.strings.get(&*s) {
+                                    None => {
+                                        self.strings.insert(s.clone());
+                                    }
+                                    // We already have self string, make constant point to it
+                                    Some(existing) => *s = existing.clone(),
+                                }
+                                s.clone()
+                            }
+                            _ => {
+                                todo!()
+                            }
+                        }
+                    } else {
+                        todo!()
+                    };
+
+                    let Some(value) = self.stack.last() else {
+                        todo!()
+                    };
+
+                    self.globals.insert(name, value.clone());
+                    self.stack.pop();
                 }
                 OpCode::Negate => {
                     let value = self.stack.pop();

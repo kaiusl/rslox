@@ -35,6 +35,16 @@ impl Value {
         }
     }
 
+    pub fn try_into_string(self) -> Result<InternedString, Self> {
+        if let Self::Object(o) = &self {
+            if let Object::String(s) = &*RefCell::borrow(&*o) {
+                return Ok(s.clone());
+            }
+        }
+
+        Err(self)
+    }
+
     pub fn is_falsey(&self) -> bool {
         matches!(self, Value::Nil | Value::Bool(false))
     }
