@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         println!("DEBUG_TRACE")
     }
 
-    let mut vm = vm::Vm::new(bytecode);
+    let mut vm = vm::Vm::new(input, bytecode);
     vm.run()?;
 
     Ok(())
