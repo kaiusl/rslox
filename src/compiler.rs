@@ -1,6 +1,6 @@
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
-use crate::lexer::{Lexer, PeekableLexer, Token};
+use crate::lexer::{Keyword, Lexer, PeekableLexer, Token};
 use crate::value::Value;
 
 use num_traits::FromPrimitive;
@@ -163,12 +163,21 @@ impl<'a> Compiler<'a> {
             Token::Number { value, .. } => self.compile_constant(Value::Number(value), prefix.span),
             Token::LParen => self.compile_grouping(prefix),
             Token::Minus => self.compile_unary(prefix),
+            Token::Keyword(Keyword::Nil) => Ok(self.emit(Instruction::Nil, prefix.span)),
+            Token::Keyword(Keyword::True) => Ok(self.emit(Instruction::True, prefix.span)),
+            Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
             _ => unreachable!("Invalid prefix operator."),
         }
     }
 
     fn has_prefix_rule(token: &Token<'_>) -> bool {
-        matches!(token, Token::Number { .. } | Token::LParen | Token::Minus)
+        matches!(
+            token,
+            Token::Number { .. }
+                | Token::LParen
+                | Token::Minus
+                | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False)
+        )
     }
 
     const fn prefix_tokens() -> &'static [Token<'static>] {
@@ -179,6 +188,9 @@ impl<'a> Compiler<'a> {
             },
             Token::LParen,
             Token::Minus,
+            Token::Keyword(Keyword::Nil),
+            Token::Keyword(Keyword::True),
+            Token::Keyword(Keyword::False),
         ]
     }
 
@@ -190,6 +202,12 @@ impl<'a> Compiler<'a> {
             },
             Token::LParen,
             Token::Minus,
+            Token::Plus,
+            Token::Slash,
+            Token::Star,
+            Token::Keyword(Keyword::Nil),
+            Token::Keyword(Keyword::True),
+            Token::Keyword(Keyword::False),
         ]
     }
 

@@ -102,6 +102,9 @@ pub enum OpCode {
     Subtract,
     Multiply,
     Divide,
+    Nil,
+    True,
+    False,
 }
 
 impl OpCode {
@@ -123,6 +126,9 @@ pub enum Instruction {
     Subtract,
     Multiply,
     Divide,
+    Nil,
+    True,
+    False,
 }
 
 impl Instruction {
@@ -135,6 +141,9 @@ impl Instruction {
             Instruction::Subtract => OpCode::Subtract,
             Instruction::Multiply => OpCode::Multiply,
             Instruction::Divide => OpCode::Divide,
+            Instruction::Nil => OpCode::Nil,
+            Instruction::True => OpCode::True,
+            Instruction::False => OpCode::False,
         }
     }
 
@@ -147,7 +156,10 @@ impl Instruction {
             | Instruction::Add
             | Instruction::Subtract
             | Instruction::Multiply
-            | Instruction::Divide => {}
+            | Instruction::Divide
+            | Instruction::Nil
+            | Instruction::True
+            | Instruction::False => {}
             Instruction::Constant(idx) => {
                 dst.push(*idx);
             }
@@ -170,6 +182,9 @@ impl Instruction {
             Some(OpCode::Subtract) => Instruction::Subtract,
             Some(OpCode::Multiply) => Instruction::Multiply,
             Some(OpCode::Divide) => Instruction::Divide,
+            Some(OpCode::Nil) => Instruction::Nil,
+            Some(OpCode::True) => Instruction::True,
+            Some(OpCode::False) => Instruction::False,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -187,7 +202,10 @@ impl Instruction {
             | Instruction::Add
             | Instruction::Subtract
             | Instruction::Multiply
-            | Instruction::Divide => 0,
+            | Instruction::Divide
+            | Instruction::Nil
+            | Instruction::True
+            | Instruction::False => 0,
             Instruction::Constant(idx) => mem::size_of_val(idx),
         }
     }
@@ -203,6 +221,9 @@ impl fmt::Display for Instruction {
             Instruction::Subtract => write!(f, "SUBTRACT"),
             Instruction::Multiply => write!(f, "MULTIPLY"),
             Instruction::Divide => write!(f, "DIVIDE"),
+            Instruction::Nil => write!(f, "NIL"),
+            Instruction::True => write!(f, "TRUE"),
+            Instruction::False => write!(f, "FALSE"),
         }
     }
 }

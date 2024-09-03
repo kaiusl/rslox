@@ -85,6 +85,10 @@ impl<'a> Vm<'a> {
                 OpCode::Subtract => self.binary_arithmetic_op(Self::subtract)?,
                 OpCode::Multiply => self.binary_arithmetic_op(Self::multiply)?,
                 OpCode::Divide => self.binary_arithmetic_op(Self::divide)?,
+
+                OpCode::Nil => self.stack.push(Value::Nil),
+                OpCode::True => self.stack.push(Value::Bool(true)),
+                OpCode::False => self.stack.push(Value::Bool(false)),
             }
         }
 
@@ -117,7 +121,7 @@ impl<'a> Vm<'a> {
                 let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
                 return Err(self.runtime_error(kind, 1));
             }
-            (Some(lhs), None) => unreachable!() // lhs cannot be some is rhs is already none
+            (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
         }
 
         Ok(())
