@@ -12,8 +12,8 @@ mod value;
 mod vm;
 
 fn main() -> Result<()> {
-    let input = r#"print 10 + 10;
-    print 1+2;"#;
+    let input = r#"print 10 + ;
+print ;"#;
     let compiler = Compiler::from_str(input);
 
     let bytecode = compiler.compile()?;

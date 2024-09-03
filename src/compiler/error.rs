@@ -6,6 +6,32 @@ use std::ops::DerefMut;
 use crate::common::Span;
 use crate::lexer::{LexerError, Token};
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Static errors")]
+pub struct StaticErrors<'b> {
+    #[source_code]
+    src: &'b str,
+    #[related]
+    errors: Vec<StaticError<'b>>,
+}
+
+impl<'b> StaticErrors<'b> {
+    pub fn new(src: &'b str) -> Self {
+        Self {
+            src,
+            errors: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, error: StaticError<'b>) {
+        self.errors.push(error);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.errors.is_empty()
+    }
+}
+
 #[derive(Debug, thiserror::Error, miette::Diagnostic, Clone)]
 pub enum StaticError<'a> {
     #[error(transparent)]
@@ -32,8 +58,6 @@ impl<'a> From<LexerError<'a>> for StaticError<'a> {
 #[derive(Debug, thiserror::Error, miette::Diagnostic, Clone)]
 #[error("{kind}")]
 pub struct CompileError<'a> {
-    #[source_code]
-    pub src: Cow<'a, str>,
     #[label("here")]
     pub span: Span,
     pub kind: CompileErrorKind<'a>,
@@ -125,12 +149,11 @@ mod tests {
         };
 
         let err = CompileError {
-            src: "1;".into(),
             span: Span::from_len(0, 1, 1),
             kind,
         };
 
-        Err(err.into())
+        Err(miette::Error::from(err).with_source_code("1.2;"))
     }
 
     #[test]
@@ -147,11 +170,10 @@ mod tests {
         };
 
         let err = CompileError {
-            src: "1;".into(),
             span: Span::from_len(0, 1, 1),
             kind,
         };
 
-        Err(err.into())
+        Err(miette::Error::from(err).with_source_code("1.2;"))
     }
 }
