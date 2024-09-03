@@ -112,6 +112,7 @@ pub enum OpCode {
     Print,
     Pop,
     DefineGlobal,
+    GetGlobal,
 }
 
 impl OpCode {
@@ -143,6 +144,7 @@ pub enum Instruction {
     Print,
     Pop,
     DefineGlobal(u8),
+    GetGlobal(u8),
 }
 
 impl Instruction {
@@ -165,6 +167,7 @@ impl Instruction {
             Instruction::Print => OpCode::Print,
             Instruction::Pop => OpCode::Pop,
             Instruction::DefineGlobal(_) => OpCode::DefineGlobal,
+            Instruction::GetGlobal(_) => OpCode::GetGlobal,
         }
     }
 
@@ -188,7 +191,9 @@ impl Instruction {
             | Instruction::Print
             | Instruction::Pop => {}
 
-            Instruction::Constant(idx) | Instruction::DefineGlobal(idx) => {
+            Instruction::Constant(idx)
+            | Instruction::DefineGlobal(idx)
+            | Instruction::GetGlobal(idx) => {
                 dst.push(*idx);
             }
         }
@@ -227,6 +232,14 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::GetGlobal) => match bytes.u8() {
+                Some(idx) => Instruction::GetGlobal(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected global index"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -254,7 +267,9 @@ impl Instruction {
             | Instruction::Lt
             | Instruction::Print
             | Instruction::Pop => 0,
-            Instruction::Constant(idx) | Instruction::DefineGlobal(idx) => mem::size_of_val(idx),
+            Instruction::Constant(idx)
+            | Instruction::DefineGlobal(idx)
+            | Instruction::GetGlobal(idx) => mem::size_of_val(idx),
         }
     }
 }
@@ -279,6 +294,7 @@ impl fmt::Display for Instruction {
             Instruction::Print => write!(f, "PRINT"),
             Instruction::Pop => write!(f, "POP"),
             Instruction::DefineGlobal(idx) => write!(f, "DEFINE_GLOBAL {}", idx),
+            Instruction::GetGlobal(idx) => write!(f, "GET_GLOBAL {}", idx),
         }
     }
 }

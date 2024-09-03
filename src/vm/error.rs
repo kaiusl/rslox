@@ -3,6 +3,7 @@ use std::borrow::Cow;
 
 use crate::common::Span;
 use crate::compiler::error::StaticError;
+use crate::value::InternedString;
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug, Clone)]
 pub enum InterpretError<'a> {
@@ -43,6 +44,7 @@ pub enum RuntimeErrorKind {
 
     InvalidOperands { expected: &'static str },
     MissingOperand { expected: &'static str },
+    UndefinedVariable { name: InternedString },
 }
 
 impl fmt::Display for RuntimeErrorKind {
@@ -58,6 +60,10 @@ impl fmt::Display for RuntimeErrorKind {
 
             RuntimeErrorKind::MissingOperand { expected } => {
                 write!(f, "missing operand, expected {}", expected)
+            }
+
+            RuntimeErrorKind::UndefinedVariable { name } => {
+                write!(f, "undefined variable `{}`", **name)
             }
         }
     }

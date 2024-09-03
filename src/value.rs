@@ -3,6 +3,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ops;
 use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Clone, PartialEq)]
 pub enum Value {
@@ -43,6 +44,16 @@ impl Value {
         }
 
         Err(self)
+    }
+
+    pub fn try_to_string(&self) -> Option<InternedString> {
+        if let Self::Object(o) = self {
+            if let Object::String(s) = &*RefCell::borrow(&*o) {
+                return Some(s.clone());
+            }
+        }
+
+        None
     }
 
     pub fn is_falsey(&self) -> bool {
@@ -86,7 +97,7 @@ impl fmt::Display for Object {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct InternedString(Rc<String>);
+pub struct InternedString(Arc<String>);
 
 impl fmt::Debug for InternedString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -96,7 +107,7 @@ impl fmt::Debug for InternedString {
 
 impl InternedString {
     pub fn new(s: String) -> Self {
-        Self(Rc::new(s))
+        Self(Arc::new(s))
     }
 }
 

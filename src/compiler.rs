@@ -97,16 +97,21 @@ impl<'a> Compiler<'a> {
         )?;
 
         match ident.item {
-            Token::Ident(s) => {
-                let result = self.compile_constant(
-                    Value::new_object(Object::String(InternedString::new(s.to_string()))),
-                    ident.span.clone(),
-                )?;
-
-                Ok(Spanned::new(result, ident.span))
-            }
+            Token::Ident(s) => self.compile_ident_constant(&s, ident.span),
             _ => unreachable!(),
         }
+    }
+
+    fn compile_ident_constant(
+        &mut self,
+        ident: &str,
+        span: Span,
+    ) -> Result<Spanned<u8>, StaticError<'a>> {
+        self.compile_constant(
+            Value::new_object(Object::String(InternedString::new(ident.to_string()))),
+            span.clone(),
+        )
+        .map(|idx| Spanned::new(idx, span))
     }
 
     fn synchronize(&mut self) {
@@ -334,8 +339,20 @@ impl<'a> Compiler<'a> {
                     prefix.span,
                 )
                 .map(|_| ()),
+            Token::Ident(ident) => self.compile_variable(ident, prefix.span),
             _ => unreachable!("Invalid prefix operator."),
         }
+    }
+
+    fn compile_variable(&mut self, ident: &str, span: Span) -> Result<(), StaticError<'a>> {
+        self.compile_named_variable(ident, span)
+    }
+
+    fn compile_named_variable(&mut self, ident: &str, span: Span) -> Result<(), StaticError<'a>> {
+        let idx = self.compile_ident_constant(ident, span)?;
+        self.emit(Instruction::GetGlobal(idx.item), idx.span);
+
+        Ok(())
     }
 
     fn has_prefix_rule(token: &Token<'_>) -> bool {
@@ -346,6 +363,7 @@ impl<'a> Compiler<'a> {
                 | Token::Minus
                 | Token::Bang
                 | Token::String { .. }
+                | Token::Ident(_)
                 | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False)
         )
     }
@@ -363,6 +381,7 @@ impl<'a> Compiler<'a> {
                 lexeme: "",
                 value: "",
             },
+            Token::Ident(""),
             Token::Keyword(Keyword::Nil),
             Token::Keyword(Keyword::True),
             Token::Keyword(Keyword::False),

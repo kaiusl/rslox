@@ -118,6 +118,19 @@ impl<'a> Vm<'a> {
                     self.globals.insert(name, value.clone());
                     self.stack.pop();
                 }
+                OpCode::GetGlobal => {
+                    let index = self.instructions.u8().unwrap();
+                    let Some(name) = self.constants[index as usize].try_to_string() else {
+                        todo!()
+                    };
+
+                    if let Some(value) = self.globals.get(&name) {
+                        self.stack.push(value.clone());
+                    } else {
+                        let kind = RuntimeErrorKind::UndefinedVariable { name };
+                        return Err(self.runtime_error(kind, 1));
+                    }
+                }
                 OpCode::Negate => {
                     let value = self.stack.pop();
                     match value {
