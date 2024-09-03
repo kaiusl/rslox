@@ -1,8 +1,5 @@
-use self::bytecode::{ByteCode, Instruction};
-use self::common::Span;
 use self::compiler::Compiler;
-use self::disassembler::{Disassembler, DisassemblerError};
-use self::value::Value;
+use self::disassembler::Disassembler;
 
 mod bytecode;
 mod common;
@@ -13,7 +10,7 @@ mod value;
 mod vm;
 
 fn main() {
-    let input = "return 1 + 2;";
+    let input = "2*3+4";
     let compiler = Compiler::from_str(input);
 
     let bytecode = compiler.compile().unwrap();

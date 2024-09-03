@@ -18,11 +18,14 @@ pub struct Vm {
     pub stack: Stack<Value>,
 
     #[cfg(feature = "debug_trace")]
-    pub disassembler: Option<Disassembler>,
+    pub disassembler: Disassembler,
 }
 
 impl Vm {
     pub fn new(bytecode: ByteCode) -> Vm {
+        #[cfg(feature = "debug_trace")]
+        let disassembler = Disassembler::new(&bytecode);
+
         Vm {
             constants: bytecode.constants,
             spans: bytecode.spans,
@@ -30,7 +33,7 @@ impl Vm {
             stack: Stack::new(),
 
             #[cfg(feature = "debug_trace")]
-            disassembler: None,
+            disassembler,
         }
     }
 
@@ -43,10 +46,8 @@ impl Vm {
                     println!("/   {slot}");
                 }
                 println!("/ ]");
-                if let Some(disassembler) = &mut self.disassembler {
-                    print!("/ ");
-                    disassembler.print_next();
-                }
+                print!("/ ");
+                self.disassembler.print_next();
             }
 
             match op {
