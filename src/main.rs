@@ -1,3 +1,5 @@
+use miette::Result;
+
 use self::compiler::Compiler;
 use self::disassembler::Disassembler;
 
@@ -9,11 +11,11 @@ mod lexer;
 mod value;
 mod vm;
 
-fn main() {
-    let input = "2*3+4";
+fn main() -> Result<()> {
+    let input = "2*3+4;";
     let compiler = Compiler::from_str(input);
 
-    let bytecode = compiler.compile().unwrap();
+    let bytecode = compiler.compile()?;
 
     let disassembler = Disassembler::new(&bytecode);
     disassembler.print();
@@ -24,5 +26,7 @@ fn main() {
     }
 
     let mut vm = vm::Vm::new(bytecode);
-    vm.run().unwrap();
+    vm.run()?;
+
+    Ok(())
 }

@@ -5,6 +5,11 @@ use crate::value::Value;
 
 use num_traits::FromPrimitive;
 
+pub mod error;
+use error::StaticError;
+
+use self::error::{CompileError, CompileErrorKind};
+
 pub struct Compiler<'a> {
     pub source: &'a str,
     pub lexer: PeekableLexer<'a>,
@@ -20,13 +25,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile(mut self) -> Result<ByteCode, CompileError> {
+    pub fn compile(mut self) -> Result<ByteCode, StaticError<'a>> {
         self.compile_expr()?;
 
-        self.consume(
-            |token| matches!(token, Token::Eof),
-            "Expected end of expression.",
-        )?;
+        self.consume(|token| matches!(token, Token::Eof), || &[Token::Eof])?;
 
         self.emit(
             Instruction::Return,
@@ -43,34 +45,52 @@ impl<'a> Compiler<'a> {
     pub fn consume(
         &mut self,
         predicate: impl Fn(&Token<'_>) -> bool,
-        msg: &'static str,
-    ) -> Result<Spanned<Token<'a>>, CompileError> {
+        expected_tokens: impl Fn() -> &'static [Token<'static>],
+    ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
         match self.lexer.next() {
             Some(Ok(token)) if predicate(&token) => Ok(token),
+
+            // Handle errors
             Some(Ok(token)) => {
-                todo!("Unexpected token {:?}. {}", token, msg);
-                Err(CompileError {})
-            },
-            Some(Err(err)) => {
-                todo!("Lexer error: {}", err);
-                Err(CompileError {})
+                // Unexpected token
+                let kind = CompileErrorKind::UnexpectedToken {
+                    expected: expected_tokens(),
+                    found: token.item,
+                };
+                let err = CompileError {
+                    src: self.source.into(),
+                    span: token.span,
+                    kind,
+                };
+
+                Err(err.into())
             }
+            Some(Err(err)) => Err(err.into()), // Lexer error
             None => {
-                todo!("Unexpected EOF.");
-                Err(CompileError {})
-            },
+                // Unexpected EOF
+                let kind = CompileErrorKind::UnexpectedToken {
+                    expected: expected_tokens(),
+                    found: Token::Eof,
+                };
+                let err = CompileError {
+                    src: self.source.into(),
+                    span: Span::from_len(self.lexer.line(), self.source.len() - 1, 1),
+                    kind,
+                };
+
+                Err(err.into())
+            }
         }
     }
 
-    pub fn compile_expr(&mut self) -> Result<(), CompileError> {
+    pub fn compile_expr(&mut self) -> Result<(), StaticError<'a>> {
         self.compile_precedence(Precedence::Assignment)
     }
 
-    fn compile_constant(&mut self, value: Value, span: Span) -> Result<(), CompileError> {
+    fn compile_constant(&mut self, value: Value, span: Span) -> Result<(), StaticError<'a>> {
         let idx = self.bytecode.add_constant(value);
         let Ok(idx) = u8::try_from(idx) else {
-            todo!("Too many constants.");
-            return Err(CompileError {});
+            todo!("Too many constants. Add another op to support more constants.");
         };
 
         self.emit(Instruction::Constant(idx), span);
@@ -78,18 +98,15 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_grouping(&mut self, lparen: Spanned<Token<'a>>) -> Result<(), CompileError> {
+    fn compile_grouping(&mut self, lparen: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
 
-        self.consume(
-            |token| matches!(token, Token::RParen),
-            "Expected ')' after expression.",
-        )?;
+        self.consume(|token| matches!(token, Token::RParen), || &[Token::RParen])?;
 
         Ok(())
     }
 
-    fn compile_unary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), CompileError> {
+    fn compile_unary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         self.compile_precedence(Precedence::Unary)?; // operand
 
         match operator.item {
@@ -100,7 +117,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_binary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), CompileError> {
+    fn compile_binary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let precedence = match operator.item {
             Token::Plus => Precedence::Term,
             Token::Minus => Precedence::Term,
@@ -122,18 +139,10 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_precedence(&mut self, precedence: Precedence) -> Result<(), CompileError> {
-        let Some(Ok(token)) = self.lexer.next() else {
-            todo!("Invalid prefix operator (EOF).");
-            return Err(CompileError {});
-        };
+    fn compile_precedence(&mut self, precedence: Precedence) -> Result<(), StaticError<'a>> {
+        let token = self.consume(Self::has_prefix_rule, Self::prefix_tokens)?;
 
-        if !self.has_prefix_rule(&token) {
-            todo!("Invalid prefix operator {:?}.", &token);
-            return Err(CompileError {});
-        }
-
-        self.combile_prefix(token)?;
+        self.compile_prefix(token)?;
 
         while let Some(Ok(token)) = self.lexer.peek() {
             if precedence > Precedence::from_token(token) {
@@ -149,7 +158,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn combile_prefix(&mut self, prefix: Spanned<Token<'a>>) -> Result<(), CompileError> {
+    fn compile_prefix(&mut self, prefix: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         match prefix.item {
             Token::Number { value, .. } => self.compile_constant(Value::Number(value), prefix.span),
             Token::LParen => self.compile_grouping(prefix),
@@ -158,11 +167,33 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn has_prefix_rule(&self, token: &Token<'_>) -> bool {
+    fn has_prefix_rule(token: &Token<'_>) -> bool {
         matches!(token, Token::Number { .. } | Token::LParen | Token::Minus)
     }
 
-    fn compile_infix(&mut self, infix: Spanned<Token<'a>>) -> Result<(), CompileError> {
+    const fn prefix_tokens() -> &'static [Token<'static>] {
+        &[
+            Token::Number {
+                value: 0.0,
+                lexeme: "0.0",
+            },
+            Token::LParen,
+            Token::Minus,
+        ]
+    }
+
+    const fn any_token() -> &'static [Token<'static>] {
+        &[
+            Token::Number {
+                value: 0.0,
+                lexeme: "0.0",
+            },
+            Token::LParen,
+            Token::Minus,
+        ]
+    }
+
+    fn compile_infix(&mut self, infix: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         match infix.item {
             Token::Plus | Token::Minus | Token::Star | Token::Slash => self.compile_binary(infix),
             _ => unreachable!("Invalid infix operator."),
@@ -173,7 +204,6 @@ impl<'a> Compiler<'a> {
 #[derive(Debug, Clone, Copy, num_derive::FromPrimitive, PartialEq, PartialOrd, Eq, Ord)]
 enum Precedence {
     None,
-
     Assignment,
     Or,
     And,
@@ -199,6 +229,3 @@ impl Precedence {
         }
     }
 }
-
-#[derive(Debug)]
-pub struct CompileError {}
