@@ -253,7 +253,7 @@ impl<'a> Compiler<'a> {
         Ok(idx)
     }
 
-    fn compile_grouping(&mut self, lparen: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_grouping(&mut self, lparen: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
 
         self.consume(|token| matches!(token, Token::RParen), || &[Token::RParen])?;
@@ -261,7 +261,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_unary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_unary(&mut self, operator: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
         self.compile_precedence(Precedence::Unary)?; // operand
 
         match operator.item {
@@ -273,7 +273,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_binary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_binary(&mut self, operator: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
         let precedence = Precedence::from_token(&operator);
 
         self.compile_precedence(precedence.next().unwrap())?;
@@ -307,7 +307,8 @@ impl<'a> Compiler<'a> {
     fn compile_precedence(&mut self, precedence: Precedence) -> Result<(), StaticError<'a>> {
         let token = self.consume(Self::has_prefix_rule, Self::prefix_tokens)?;
 
-        self.compile_prefix(token)?;
+        let can_assign = precedence <= Precedence::Assignment;
+        self.compile_prefix(token, can_assign)?;
 
         while let Some(Ok(token)) = self.lexer.peek() {
             if precedence > Precedence::from_token(token) {
@@ -317,19 +318,34 @@ impl<'a> Compiler<'a> {
                 unreachable!()
             };
 
-            self.compile_infix(infix)?;
+            self.compile_infix(infix, can_assign)?;
+        }
+
+        if can_assign {
+            if let Some(tok) = self.consume_if(|token| matches!(token, Token::Eq))? {
+                let kind = CompileErrorKind::InvalidAssignmentTarget;
+                let err = CompileError {
+                    span: tok.span,
+                    kind,
+                };
+                return Err(err.into());
+            }
         }
 
         Ok(())
     }
 
-    fn compile_prefix(&mut self, prefix: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_prefix(
+        &mut self,
+        prefix: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
         match prefix.item {
             Token::Number { value, .. } => self
                 .compile_constant(Value::Number(value), prefix.span)
                 .map(|_| ()),
-            Token::LParen => self.compile_grouping(prefix),
-            Token::Minus | Token::Bang => self.compile_unary(prefix),
+            Token::LParen => self.compile_grouping(prefix, can_assign),
+            Token::Minus | Token::Bang => self.compile_unary(prefix, can_assign),
             Token::Keyword(Keyword::Nil) => Ok(self.emit(Instruction::Nil, prefix.span)),
             Token::Keyword(Keyword::True) => Ok(self.emit(Instruction::True, prefix.span)),
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
@@ -339,17 +355,37 @@ impl<'a> Compiler<'a> {
                     prefix.span,
                 )
                 .map(|_| ()),
-            Token::Ident(ident) => self.compile_variable(ident, prefix.span),
+            Token::Ident(ident) => self.compile_variable(ident, prefix.span, can_assign),
             _ => unreachable!("Invalid prefix operator."),
         }
     }
 
-    fn compile_variable(&mut self, ident: &str, span: Span) -> Result<(), StaticError<'a>> {
-        self.compile_named_variable(ident, span)
+    fn compile_variable(
+        &mut self,
+        ident: &str,
+        span: Span,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
+        self.compile_named_variable(ident, span, can_assign)
     }
 
-    fn compile_named_variable(&mut self, ident: &str, span: Span) -> Result<(), StaticError<'a>> {
+    fn compile_named_variable(
+        &mut self,
+        ident: &str,
+        span: Span,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
         let idx = self.compile_ident_constant(ident, span)?;
+
+        if can_assign {
+            if let Some(tok) = self.consume_if(|tok| matches!(tok, Token::Eq))? {
+                self.compile_expr()?;
+                self.emit(Instruction::SetGlobal(idx.item), idx.span);
+
+                return Ok(());
+            }
+        }
+
         self.emit(Instruction::GetGlobal(idx.item), idx.span);
 
         Ok(())
@@ -406,7 +442,7 @@ impl<'a> Compiler<'a> {
         ]
     }
 
-    fn compile_infix(&mut self, infix: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_infix(&mut self, infix: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
         match infix.item {
             Token::Plus
             | Token::Minus
@@ -417,7 +453,7 @@ impl<'a> Compiler<'a> {
             | Token::Gt
             | Token::GtEq
             | Token::Lt
-            | Token::LtEq => self.compile_binary(infix),
+            | Token::LtEq => self.compile_binary(infix, can_assign),
             _ => unreachable!("Invalid infix operator."),
         }
     }

@@ -113,6 +113,7 @@ pub enum OpCode {
     Pop,
     DefineGlobal,
     GetGlobal,
+    SetGlobal,
 }
 
 impl OpCode {
@@ -145,6 +146,7 @@ pub enum Instruction {
     Pop,
     DefineGlobal(u8),
     GetGlobal(u8),
+    SetGlobal(u8),
 }
 
 impl Instruction {
@@ -168,6 +170,7 @@ impl Instruction {
             Instruction::Pop => OpCode::Pop,
             Instruction::DefineGlobal(_) => OpCode::DefineGlobal,
             Instruction::GetGlobal(_) => OpCode::GetGlobal,
+            Instruction::SetGlobal(_) => OpCode::SetGlobal,
         }
     }
 
@@ -193,7 +196,8 @@ impl Instruction {
 
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
-            | Instruction::GetGlobal(idx) => {
+            | Instruction::GetGlobal(idx)
+            | Instruction::SetGlobal(idx) => {
                 dst.push(*idx);
             }
         }
@@ -240,6 +244,14 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::SetGlobal) => match bytes.u8() {
+                Some(idx) => Instruction::SetGlobal(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected global index"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -267,9 +279,11 @@ impl Instruction {
             | Instruction::Lt
             | Instruction::Print
             | Instruction::Pop => 0,
+
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
-            | Instruction::GetGlobal(idx) => mem::size_of_val(idx),
+            | Instruction::GetGlobal(idx)
+            | Instruction::SetGlobal(idx) => mem::size_of_val(idx),
         }
     }
 }
@@ -295,6 +309,7 @@ impl fmt::Display for Instruction {
             Instruction::Pop => write!(f, "POP"),
             Instruction::DefineGlobal(idx) => write!(f, "DEFINE_GLOBAL {}", idx),
             Instruction::GetGlobal(idx) => write!(f, "GET_GLOBAL {}", idx),
+            Instruction::SetGlobal(idx) => write!(f, "SET_GLOBAL {}", idx),
         }
     }
 }

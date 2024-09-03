@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
@@ -129,6 +130,23 @@ impl<'a> Vm<'a> {
                     } else {
                         let kind = RuntimeErrorKind::UndefinedVariable { name };
                         return Err(self.runtime_error(kind, 1));
+                    }
+                }
+                OpCode::SetGlobal => {
+                    let index = self.instructions.u8().unwrap();
+                    let Some(name) = self.constants[index as usize].try_to_string() else {
+                        todo!()
+                    };
+                    match self.globals.entry(name) {
+                        Entry::Occupied(mut entry) => {
+                            entry.insert(self.stack.last().unwrap().clone());
+                        }
+                        Entry::Vacant(entry) => {
+                            let kind = RuntimeErrorKind::UndefinedVariable {
+                                name: entry.into_key(),
+                            };
+                            return Err(self.runtime_error(kind, 1));
+                        }
                     }
                 }
                 OpCode::Negate => {

@@ -69,6 +69,8 @@ pub enum CompileErrorKind<'src> {
         expected: &'static [Token<'static>],
         found: Token<'src>,
     },
+
+    InvalidAssignmentTarget,
 }
 
 impl fmt::Display for CompileErrorKind<'_> {
@@ -99,6 +101,8 @@ impl fmt::Display for CompileErrorKind<'_> {
                     ),
                 }
             }
+
+            CompileErrorKind::InvalidAssignmentTarget => write!(f, "invalid assignment target"),
         }
     }
 }

@@ -12,8 +12,10 @@ mod value;
 mod vm;
 
 fn main() -> Result<()> {
-    let input = r#"var beverage = "cafe au lait";
-var breakfast = "beignets with " + beverage;
+    let input = r#"var breakfast = "beignets";
+var beverage = "cafe au lait";
+breakfast = "beignets with " + beverage;
+
 print breakfast;"#;
     let compiler = Compiler::from_str(input);
 
