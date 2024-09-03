@@ -59,8 +59,13 @@ impl<'a> Vm<'a> {
 
             match op {
                 OpCode::Return => {
-                    let value = self.stack.pop().unwrap();
-                    println!("{}", value);
+                    let value = self.stack.pop();
+                    match value {
+                        Some(value) => {
+                            println!("RET: {}", value);
+                        }
+                        None => {}
+                    }
                 }
                 OpCode::Constant => {
                     let index = self.instructions.u8().unwrap();
@@ -145,6 +150,22 @@ impl<'a> Vm<'a> {
                 OpCode::Nil => self.stack.push(Value::Nil),
                 OpCode::True => self.stack.push(Value::Bool(true)),
                 OpCode::False => self.stack.push(Value::Bool(false)),
+                OpCode::Print => {
+                    let value = self.stack.pop();
+                    match value {
+                        Some(value) => {
+                            println!("{}", value);
+                        }
+                        None => {
+                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
+                            return Err(self.runtime_error(kind, 1));
+                        }
+                    }
+                }
+
+                OpCode::Pop => {
+                    self.stack.pop();
+                }
             }
         }
 

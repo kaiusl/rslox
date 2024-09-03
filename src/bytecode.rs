@@ -109,6 +109,8 @@ pub enum OpCode {
     Eq,
     Gt,
     Lt,
+    Print,
+    Pop,
 }
 
 impl OpCode {
@@ -137,6 +139,8 @@ pub enum Instruction {
     Eq,
     Gt,
     Lt,
+    Print,
+    Pop,
 }
 
 impl Instruction {
@@ -156,6 +160,8 @@ impl Instruction {
             Instruction::Eq => OpCode::Eq,
             Instruction::Gt => OpCode::Gt,
             Instruction::Lt => OpCode::Lt,
+            Instruction::Print => OpCode::Print,
+            Instruction::Pop => OpCode::Pop,
         }
     }
 
@@ -175,7 +181,9 @@ impl Instruction {
             | Instruction::Not
             | Instruction::Eq
             | Instruction::Gt
-            | Instruction::Lt => {}
+            | Instruction::Lt
+            | Instruction::Print
+            | Instruction::Pop => {}
             Instruction::Constant(idx) => {
                 dst.push(*idx);
             }
@@ -205,6 +213,8 @@ impl Instruction {
             Some(OpCode::Eq) => Instruction::Eq,
             Some(OpCode::Gt) => Instruction::Gt,
             Some(OpCode::Lt) => Instruction::Lt,
+            Some(OpCode::Print) => Instruction::Print,
+            Some(OpCode::Pop) => Instruction::Pop,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -229,7 +239,9 @@ impl Instruction {
             | Instruction::Not
             | Instruction::Eq
             | Instruction::Gt
-            | Instruction::Lt => 0,
+            | Instruction::Lt
+            | Instruction::Print
+            | Instruction::Pop => 0,
             Instruction::Constant(idx) => mem::size_of_val(idx),
         }
     }
@@ -252,6 +264,8 @@ impl fmt::Display for Instruction {
             Instruction::Eq => write!(f, "EQ"),
             Instruction::Gt => write!(f, "GT"),
             Instruction::Lt => write!(f, "LT"),
+            Instruction::Print => write!(f, "PRINT"),
+            Instruction::Pop => write!(f, "POP"),
         }
     }
 }

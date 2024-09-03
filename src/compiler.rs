@@ -26,7 +26,9 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn compile(mut self) -> Result<ByteCode, StaticError<'a>> {
-        self.compile_expr()?;
+        while self.lexer.is_next(|tok| !matches!(tok, Token::Eof)) {
+            self.compile_declaration();
+        }
 
         self.consume(|token| matches!(token, Token::Eof), || &[Token::Eof])?;
 
@@ -38,8 +40,62 @@ impl<'a> Compiler<'a> {
         Ok(self.bytecode)
     }
 
+    fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
+        self.compile_stmt()
+    }
+
+    fn compile_stmt(&mut self) -> Result<(), StaticError<'a>> {
+        let tok = match self.lexer.peek() {
+            Some(Ok(tok)) => tok,
+            _ => todo!(),
+        };
+
+        let Some(tok) = self.consume_if(|tok| matches!(tok, Token::Keyword(Keyword::Print)))?
+        else {
+            todo!("expr stmt")
+        };
+
+        match tok.item {
+            Token::Keyword(Keyword::Print) => self.compile_print_stmt(tok),
+            _ => unreachable!(),
+        }
+    }
+
+    fn compile_expr_stmt(&mut self) -> Result<(), StaticError<'a>> {
+        self.compile_expr()?;
+        let semicolon = self.consume(
+            |tok| matches!(tok, Token::Semicolon),
+            || &[Token::Semicolon],
+        )?;
+        self.emit(Instruction::Pop, semicolon.span);
+        Ok(())
+    }
+
+    fn compile_print_stmt(&mut self, print: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        self.compile_expr()?;
+        self.consume(
+            |tok| matches!(tok, Token::Semicolon),
+            || &[Token::Semicolon],
+        )?;
+
+        self.emit(Instruction::Print, print.span);
+        Ok(())
+    }
+
     fn emit(&mut self, instruction: Instruction, span: Span) {
         self.bytecode.push(instruction, span);
+    }
+
+    pub fn consume_if(
+        &mut self,
+        predicate: impl Fn(&Token<'_>) -> bool,
+    ) -> Result<Option<Spanned<Token<'a>>>, StaticError<'a>> {
+        match self.lexer.peek() {
+            Some(Ok(token)) if predicate(token) => Ok(Some(self.lexer.next().unwrap().unwrap())),
+            Some(Ok(_)) => Ok(None),
+            Some(Err(_)) => Err(self.lexer.next().unwrap().unwrap_err().into()),
+            None => Ok(None),
+        }
     }
 
     pub fn consume(
