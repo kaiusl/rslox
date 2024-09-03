@@ -12,7 +12,7 @@ mod value;
 mod vm;
 
 fn main() -> Result<()> {
-    let input = r#""st" + "ri" + "ng""#;
+    let input = r#""st" + "ri" + "ng" +  "ng""#;
     let compiler = Compiler::from_str(input);
 
     let bytecode = compiler.compile()?;
@@ -27,6 +27,8 @@ fn main() -> Result<()> {
 
     let mut vm = vm::Vm::new(input, bytecode);
     vm.run()?;
+
+    dbg!(vm);
 
     Ok(())
 }

@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-use std::ops::Deref;
+use std::collections::{HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::Disassembler;
-use crate::value::{Object, Value};
+use crate::value::{InternedString, Object, Value};
 
 use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
 
@@ -12,12 +13,14 @@ pub mod error;
 
 type Stack<T> = Vec<T>;
 
+#[derive(Debug)]
 pub struct Vm<'a> {
     pub src: &'a str,
     pub constants: Vec<Value>,
     pub spans: HashMap<usize, Span>,
     pub instructions: BytesCursor,
     pub stack: Stack<Value>,
+    pub strings: HashSet<InternedString>,
 
     #[cfg(feature = "debug_trace")]
     pub disassembler: Disassembler,
@@ -34,6 +37,7 @@ impl<'a> Vm<'a> {
             spans: bytecode.spans,
             instructions: BytesCursor::new(bytecode.code),
             stack: Stack::new(),
+            strings: HashSet::new(),
 
             #[cfg(feature = "debug_trace")]
             disassembler,
@@ -61,6 +65,22 @@ impl<'a> Vm<'a> {
                 OpCode::Constant => {
                     let index = self.instructions.u8().unwrap();
                     let value = &self.constants[index as usize];
+
+                    // Push constant to strings table
+                    if let Value::Object(obj) = value {
+                        match obj.borrow_mut().deref_mut() {
+                            Object::String(s) => match self.strings.get(&*s) {
+                                None => {
+                                    self.strings.insert(s.clone());
+                                }
+                                // We already have self string, make constant point to it
+                                Some(existing) => *s = existing.clone(),
+                            },
+                            _ => {
+                                todo!()
+                            }
+                        }
+                    }
                     self.stack.push(value.clone());
 
                     println!("{}", value);
@@ -131,20 +151,31 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
+    fn intern_string(&mut self, s: String) -> InternedString {
+        match self.strings.get(&s) {
+            Some(existing) => existing.clone(),
+            None => {
+                let new = InternedString::new(s);
+                self.strings.insert(new.clone());
+                new
+            }
+        }
+    }
+
     fn run_binary_add(&mut self) -> Result<(), InterpretError<'a>> {
-        let this = &mut *self;
         let op = Self::add_number;
-        let rhs = this.stack.pop();
-        let lhs = this.stack.pop();
+        let rhs = self.stack.pop();
+        let lhs = self.stack.pop();
         match (lhs, rhs) {
             (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                this.stack.push(Value::Number(op(lhs, rhs)));
+                self.stack.push(Value::Number(op(lhs, rhs)));
             }
             (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => {
                 match (lhs.borrow().deref(), rhs.borrow().deref()) {
                     (Object::String(lhs), Object::String(rhs)) => {
-                        let new = lhs.clone() + rhs;
-                        this.stack.push(Value::new_object(Object::String(new)));
+                        let new = lhs.to_string() + rhs;
+                        let new = self.intern_string(new);
+                        self.stack.push(Value::new_object(Object::String(new)));
                     }
                     _ => {
                         todo!()
@@ -152,25 +183,25 @@ impl<'a> Vm<'a> {
                 }
             }
             (Some(lhs), Some(rhs)) => {
-                this.stack.push(lhs);
-                this.stack.push(rhs);
+                self.stack.push(lhs);
+                self.stack.push(rhs);
                 let kind = RuntimeErrorKind::InvalidOperands {
                     expected: "two numbers or string",
                 };
-                return Err(this.runtime_error(kind, 1));
+                return Err(self.runtime_error(kind, 1));
             }
             (None, Some(rhs)) => {
-                this.stack.push(rhs);
+                self.stack.push(rhs);
                 let kind = RuntimeErrorKind::MissingOperand {
                     expected: "two numbers or string",
                 };
-                return Err(this.runtime_error(kind, 1));
+                return Err(self.runtime_error(kind, 1));
             }
             (None, None) => {
                 let kind = RuntimeErrorKind::MissingOperand {
                     expected: "two numbers or string",
                 };
-                return Err(this.runtime_error(kind, 1));
+                return Err(self.runtime_error(kind, 1));
             }
             (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
         }
