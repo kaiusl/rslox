@@ -106,6 +106,9 @@ pub enum OpCode {
     True,
     False,
     Not,
+    Eq,
+    Gt,
+    Lt,
 }
 
 impl OpCode {
@@ -131,6 +134,9 @@ pub enum Instruction {
     True,
     False,
     Not,
+    Eq,
+    Gt,
+    Lt,
 }
 
 impl Instruction {
@@ -147,6 +153,9 @@ impl Instruction {
             Instruction::True => OpCode::True,
             Instruction::False => OpCode::False,
             Instruction::Not => OpCode::Not,
+            Instruction::Eq => OpCode::Eq,
+            Instruction::Gt => OpCode::Gt,
+            Instruction::Lt => OpCode::Lt,
         }
     }
 
@@ -163,7 +172,10 @@ impl Instruction {
             | Instruction::Nil
             | Instruction::True
             | Instruction::False
-            | Instruction::Not => {}
+            | Instruction::Not
+            | Instruction::Eq
+            | Instruction::Gt
+            | Instruction::Lt => {}
             Instruction::Constant(idx) => {
                 dst.push(*idx);
             }
@@ -190,6 +202,9 @@ impl Instruction {
             Some(OpCode::True) => Instruction::True,
             Some(OpCode::False) => Instruction::False,
             Some(OpCode::Not) => Instruction::Not,
+            Some(OpCode::Eq) => Instruction::Eq,
+            Some(OpCode::Gt) => Instruction::Gt,
+            Some(OpCode::Lt) => Instruction::Lt,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -211,7 +226,10 @@ impl Instruction {
             | Instruction::Nil
             | Instruction::True
             | Instruction::False
-            | Instruction::Not => 0,
+            | Instruction::Not
+            | Instruction::Eq
+            | Instruction::Gt
+            | Instruction::Lt => 0,
             Instruction::Constant(idx) => mem::size_of_val(idx),
         }
     }
@@ -231,6 +249,9 @@ impl fmt::Display for Instruction {
             Instruction::True => write!(f, "TRUE"),
             Instruction::False => write!(f, "FALSE"),
             Instruction::Not => write!(f, "NOT"),
+            Instruction::Eq => write!(f, "EQ"),
+            Instruction::Gt => write!(f, "GT"),
+            Instruction::Lt => write!(f, "LT"),
         }
     }
 }

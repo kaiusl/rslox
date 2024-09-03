@@ -93,10 +93,33 @@ impl<'a> Vm<'a> {
                         }
                     }
                 }
-                OpCode::Add => self.binary_arithmetic_op(Self::add)?,
-                OpCode::Subtract => self.binary_arithmetic_op(Self::subtract)?,
-                OpCode::Multiply => self.binary_arithmetic_op(Self::multiply)?,
-                OpCode::Divide => self.binary_arithmetic_op(Self::divide)?,
+                OpCode::Add => self.binary_arithmetic_op(Self::add_number)?,
+                OpCode::Subtract => self.binary_arithmetic_op(Self::subtract_number)?,
+                OpCode::Multiply => self.binary_arithmetic_op(Self::multiply_number)?,
+                OpCode::Divide => self.binary_arithmetic_op(Self::divide_number)?,
+
+                OpCode::Eq => {
+                    let rhs = self.stack.pop();
+                    let lhs = self.stack.pop();
+                    match (lhs, rhs) {
+                        (Some(lhs), Some(rhs)) => {
+                            self.stack.push(Value::Bool(lhs == rhs));
+                        }
+                        (None, Some(rhs)) => {
+                            self.stack.push(rhs);
+                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
+                            return Err(self.runtime_error(kind, 1));
+                        }
+                        (None, None) => {
+                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
+                            return Err(self.runtime_error(kind, 1));
+                        }
+                        (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
+                    }
+                }
+
+                OpCode::Lt => self.binary_cmp_op(Self::lt_number)?,
+                OpCode::Gt => self.binary_cmp_op(Self::gt_number)?,
 
                 OpCode::Nil => self.stack.push(Value::Nil),
                 OpCode::True => self.stack.push(Value::Bool(true)),
@@ -140,22 +163,60 @@ impl<'a> Vm<'a> {
     }
 
     #[inline]
-    fn add(lhs: f64, rhs: f64) -> f64 {
+    fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), InterpretError<'a>> {
+        let rhs = self.stack.pop();
+        let lhs = self.stack.pop();
+        match (lhs, rhs) {
+            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
+                self.stack.push(Value::Bool(op(lhs, rhs)));
+            }
+            (Some(lhs), Some(rhs)) => {
+                self.stack.push(lhs);
+                self.stack.push(rhs);
+                let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
+                return Err(self.runtime_error(kind, 1));
+            }
+            (None, Some(rhs)) => {
+                self.stack.push(rhs);
+                let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
+                return Err(self.runtime_error(kind, 1));
+            }
+            (None, None) => {
+                let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
+                return Err(self.runtime_error(kind, 1));
+            }
+            (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn lt_number(lhs: f64, rhs: f64) -> bool {
+        lhs < rhs
+    }
+
+    #[inline]
+    fn gt_number(lhs: f64, rhs: f64) -> bool {
+        lhs > rhs
+    }
+
+    #[inline]
+    fn add_number(lhs: f64, rhs: f64) -> f64 {
         lhs + rhs
     }
 
     #[inline]
-    fn subtract(lhs: f64, rhs: f64) -> f64 {
+    fn subtract_number(lhs: f64, rhs: f64) -> f64 {
         lhs - rhs
     }
 
     #[inline]
-    fn multiply(lhs: f64, rhs: f64) -> f64 {
+    fn multiply_number(lhs: f64, rhs: f64) -> f64 {
         lhs * rhs
     }
 
     #[inline]
-    fn divide(lhs: f64, rhs: f64) -> f64 {
+    fn divide_number(lhs: f64, rhs: f64) -> f64 {
         lhs / rhs
     }
 

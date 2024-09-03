@@ -119,13 +119,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_binary(&mut self, operator: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let precedence = match operator.item {
-            Token::Plus => Precedence::Term,
-            Token::Minus => Precedence::Term,
-            Token::Star => Precedence::Factor,
-            Token::Slash => Precedence::Factor,
-            _ => unreachable!("Invalid binary operator."),
-        };
+        let precedence = Precedence::from_token(&operator);
 
         self.compile_precedence(precedence.next().unwrap())?;
 
@@ -134,6 +128,21 @@ impl<'a> Compiler<'a> {
             Token::Minus => self.emit(Instruction::Subtract, operator.span),
             Token::Star => self.emit(Instruction::Multiply, operator.span),
             Token::Slash => self.emit(Instruction::Divide, operator.span),
+            Token::EqEq => self.emit(Instruction::Eq, operator.span),
+            Token::BangEq => {
+                self.emit(Instruction::Eq, operator.span.clone());
+                self.emit(Instruction::Not, operator.span);
+            }
+            Token::Lt => self.emit(Instruction::Lt, operator.span),
+            Token::LtEq => {
+                self.emit(Instruction::Gt, operator.span.clone());
+                self.emit(Instruction::Not, operator.span);
+            }
+            Token::Gt => self.emit(Instruction::Gt, operator.span),
+            Token::GtEq => {
+                self.emit(Instruction::Lt, operator.span.clone());
+                self.emit(Instruction::Not, operator.span);
+            }
             _ => unreachable!("Invalid binary operator."),
         }
 
@@ -217,7 +226,16 @@ impl<'a> Compiler<'a> {
 
     fn compile_infix(&mut self, infix: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         match infix.item {
-            Token::Plus | Token::Minus | Token::Star | Token::Slash => self.compile_binary(infix),
+            Token::Plus
+            | Token::Minus
+            | Token::Star
+            | Token::Slash
+            | Token::EqEq
+            | Token::BangEq
+            | Token::Gt
+            | Token::GtEq
+            | Token::Lt
+            | Token::LtEq => self.compile_binary(infix),
             _ => unreachable!("Invalid infix operator."),
         }
     }
@@ -247,6 +265,9 @@ impl Precedence {
         match token {
             Token::Plus | Token::Minus => Self::Term,
             Token::Star | Token::Slash => Self::Factor,
+            Token::BangEq | Token::EqEq => Precedence::Equality,
+            Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Precedence::Comparison,
+
             _ => Self::None,
         }
     }
