@@ -50,7 +50,7 @@ impl<'a> Compiler<'a> {
 
         self.emit(
             Instruction::Return,
-            Span::from_len(0, self.source.len() - 1, 1),
+            Span::from_len(0, self.source.len().saturating_sub(1), 0),
         );
 
         if !self.errors.is_empty() {
@@ -222,7 +222,7 @@ impl<'a> Compiler<'a> {
                 };
                 let err = CompileError::new(
                     kind,
-                    Span::from_len(self.lexer.line(), self.source.len() - 1, 1),
+                    Span::from_len(self.lexer.line(), self.source.len().saturating_sub(1), 0),
                 );
 
                 Err(err.into())
