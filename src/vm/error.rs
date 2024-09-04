@@ -43,7 +43,6 @@ pub enum RuntimeErrorKind {
     InvalidOperand { expected: &'static str },
 
     InvalidOperands { expected: &'static str },
-    MissingOperand { expected: &'static str },
     UndefinedVariable { name: InternedString },
 }
 
@@ -56,10 +55,6 @@ impl fmt::Display for RuntimeErrorKind {
 
             RuntimeErrorKind::InvalidOperands { expected } => {
                 write!(f, "invalid operands, expected {}", expected)
-            }
-
-            RuntimeErrorKind::MissingOperand { expected } => {
-                write!(f, "missing operand, expected {}", expected)
             }
 
             RuntimeErrorKind::UndefinedVariable { name } => {

@@ -1,7 +1,7 @@
+use core::panic;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
@@ -81,9 +81,6 @@ impl<'a> Vm<'a> {
                                 // We already have self string, make constant point to it
                                 Some(existing) => *s = existing.clone(),
                             },
-                            _ => {
-                                todo!()
-                            }
                         }
                     }
                     self.stack.push(value.clone());
@@ -104,16 +101,13 @@ impl<'a> Vm<'a> {
                                 }
                                 s.clone()
                             }
-                            _ => {
-                                todo!()
-                            }
                         }
                     } else {
-                        todo!()
+                        panic!("tried to define global with non string identifier, it's a bug in VM or compiler")
                     };
 
                     let Some(value) = self.stack.last() else {
-                        todo!()
+                        panic!("tried to define global with no value on stack, it's a bug in VM or compiler")
                     };
 
                     self.globals.insert(name, value.clone());
@@ -122,7 +116,7 @@ impl<'a> Vm<'a> {
                 OpCode::GetGlobal => {
                     let index = self.instructions.u8().unwrap();
                     let Some(name) = self.constants[index as usize].try_to_string() else {
-                        todo!()
+                        panic!("tried to get global with non string identifier, it's a bug in VM or compiler")
                     };
 
                     if let Some(value) = self.globals.get(&name) {
@@ -135,7 +129,7 @@ impl<'a> Vm<'a> {
                 OpCode::SetGlobal => {
                     let index = self.instructions.u8().unwrap();
                     let Some(name) = self.constants[index as usize].try_to_string() else {
-                        todo!()
+                        panic!("tried to set global with non string identifier, it's a bug in VM or compiler")
                     };
                     match self.globals.entry(name) {
                         Entry::Occupied(mut entry) => {
@@ -161,8 +155,7 @@ impl<'a> Vm<'a> {
                             return Err(self.runtime_error(kind, 1));
                         }
                         None => {
-                            let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
-                            return Err(self.runtime_error(kind, 1));
+                            panic!("tried to do negate with no value on stack, it's a bug in VM or compiler")
                         }
                     }
                 }
@@ -173,8 +166,7 @@ impl<'a> Vm<'a> {
                             self.stack.push(Value::Bool(value.is_falsey()));
                         }
                         None => {
-                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
-                            return Err(self.runtime_error(kind, 1));
+                            panic!("tried to do not with no value on stack, it's a bug in VM or compiler")
                         }
                     }
                 }
@@ -190,16 +182,9 @@ impl<'a> Vm<'a> {
                         (Some(lhs), Some(rhs)) => {
                             self.stack.push(Value::Bool(lhs == rhs));
                         }
-                        (None, Some(rhs)) => {
-                            self.stack.push(rhs);
-                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
-                            return Err(self.runtime_error(kind, 1));
+                        _ => {
+                            panic!("tried to do eq binary op with not enough values on stack, it's a bug in VM or compiler")
                         }
-                        (None, None) => {
-                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
-                            return Err(self.runtime_error(kind, 1));
-                        }
-                        (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
                     }
                 }
 
@@ -216,8 +201,7 @@ impl<'a> Vm<'a> {
                             println!("{}", value);
                         }
                         None => {
-                            let kind = RuntimeErrorKind::MissingOperand { expected: "any" };
-                            return Err(self.runtime_error(kind, 1));
+                            panic!("tried to print with no value on stack, it's a bug in VM or compiler")
                         }
                     }
                 }
@@ -257,9 +241,6 @@ impl<'a> Vm<'a> {
                         let new = self.intern_string(new);
                         self.stack.push(Value::new_object(Object::String(new)));
                     }
-                    _ => {
-                        todo!()
-                    }
                 }
             }
             (Some(lhs), Some(rhs)) => {
@@ -270,20 +251,9 @@ impl<'a> Vm<'a> {
                 };
                 return Err(self.runtime_error(kind, 1));
             }
-            (None, Some(rhs)) => {
-                self.stack.push(rhs);
-                let kind = RuntimeErrorKind::MissingOperand {
-                    expected: "two numbers or string",
-                };
-                return Err(self.runtime_error(kind, 1));
+            _ => {
+                panic!("tried to do binary add with not enough values on stack, it's a bug in VM or compiler")
             }
-            (None, None) => {
-                let kind = RuntimeErrorKind::MissingOperand {
-                    expected: "two numbers or string",
-                };
-                return Err(self.runtime_error(kind, 1));
-            }
-            (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
         }
 
         Ok(())
@@ -306,16 +276,9 @@ impl<'a> Vm<'a> {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 return Err(self.runtime_error(kind, 1));
             }
-            (None, Some(rhs)) => {
-                self.stack.push(rhs);
-                let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
+            _ => {
+                panic!("tried to do arithmetic binary op with not enough values on stack, it's a bug in VM or compiler")
             }
-            (None, None) => {
-                let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
-            }
-            (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
         }
 
         Ok(())
@@ -335,16 +298,9 @@ impl<'a> Vm<'a> {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 return Err(self.runtime_error(kind, 1));
             }
-            (None, Some(rhs)) => {
-                self.stack.push(rhs);
-                let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
+            _ => {
+                panic!("tried to do cmp binary op with not enough values on stack, it's a bug in VM or compiler")
             }
-            (None, None) => {
-                let kind = RuntimeErrorKind::MissingOperand { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
-            }
-            (Some(lhs), None) => unreachable!(), // lhs cannot be some is rhs is already none
         }
         Ok(())
     }
