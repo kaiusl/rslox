@@ -28,10 +28,18 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn compile(mut self) -> Result<ByteCode, StaticErrors<'a>> {
-        while self.lexer.is_next(|tok| !matches!(tok, Token::Eof)) {
-            match self.compile_declaration() {
-                Ok(()) => (),
-                Err(err) => self.errors.push(err),
+        loop {
+            match self.lexer.peek() {
+                Ok(Some(tok)) if **tok == Token::Eof => break,
+                Ok(None) => unreachable!(), // Token::Eof should be returned before end, thus None can never happen here
+                Ok(Some(_)) => match self.compile_declaration() {
+                    Ok(()) => (),
+                    Err(err) => self.errors.push(err),
+                },
+                Err(err) => {
+                    self.errors.push(err.into());
+                    self.synchronize();
+                }
             }
         }
 
@@ -53,7 +61,10 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
-        let result = match self.consume_if(|tok| matches!(tok, Token::Keyword(Keyword::Var)))? {
+        let result = match self
+            .lexer
+            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Var)))?
+        {
             Some(tok) => self.compile_var_decl(tok),
             None => self.compile_stmt(),
         };
@@ -70,7 +81,7 @@ impl<'a> Compiler<'a> {
     fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let const_idx = self.compile_variable_name()?;
 
-        if let Some(eq) = self.consume_if(|tok| matches!(tok, Token::Eq))? {
+        if let Some(eq) = self.lexer.next_if(|tok| matches!(tok, Token::Eq))? {
             self.compile_expr()?;
         } else {
             self.emit(Instruction::Nil, var_kw.span.combine(&const_idx.span))
@@ -117,7 +128,7 @@ impl<'a> Compiler<'a> {
     fn synchronize(&mut self) {
         loop {
             match self.lexer.peek() {
-                Some(Ok(tok)) => match tok.item {
+                Ok(Some(tok)) => match tok.item {
                     Token::Eof | Token::Semicolon => {
                         self.lexer.next();
                         break;
@@ -136,8 +147,8 @@ impl<'a> Compiler<'a> {
                         self.lexer.next();
                     }
                 },
-                None => break,
-                Some(Err(_)) => {
+                Ok(None) => break,
+                Err(_) => {
                     // ignore following error before synchronization point
                     self.lexer.next();
                 }
@@ -146,12 +157,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_stmt(&mut self) -> Result<(), StaticError<'a>> {
-        let tok = match self.lexer.peek() {
-            Some(Ok(tok)) => tok,
-            _ => todo!(),
-        };
-
-        let Some(tok) = self.consume_if(|tok| matches!(tok, Token::Keyword(Keyword::Print)))?
+        let Some(tok) = self
+            .lexer
+            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Print)))?
         else {
             return self.compile_expr_stmt();
         };
@@ -187,28 +195,16 @@ impl<'a> Compiler<'a> {
         self.bytecode.push(instruction, span);
     }
 
-    pub fn consume_if(
-        &mut self,
-        predicate: impl Fn(&Token<'_>) -> bool,
-    ) -> Result<Option<Spanned<Token<'a>>>, StaticError<'a>> {
-        match self.lexer.peek() {
-            Some(Ok(token)) if predicate(token) => Ok(Some(self.lexer.next().unwrap().unwrap())),
-            Some(Ok(_)) => Ok(None),
-            Some(Err(_)) => Err(self.lexer.next().unwrap().unwrap_err().into()),
-            None => Ok(None),
-        }
-    }
-
     pub fn consume(
         &mut self,
         predicate: impl Fn(&Token<'_>) -> bool,
         expected_tokens: impl Fn() -> &'static [Token<'static>],
     ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
-        match self.lexer.next() {
-            Some(Ok(token)) if predicate(&token) => Ok(token),
+        match self.lexer.next()? {
+            Some(token) if predicate(&token) => Ok(token),
 
             // Handle errors
-            Some(Ok(token)) => {
+            Some(token) => {
                 // Unexpected token
                 let kind = CompileErrorKind::UnexpectedToken {
                     expected: expected_tokens(),
@@ -221,7 +217,6 @@ impl<'a> Compiler<'a> {
 
                 Err(err.into())
             }
-            Some(Err(err)) => Err(err.into()), // Lexer error
             None => {
                 // Unexpected EOF
                 let kind = CompileErrorKind::UnexpectedToken {
@@ -253,7 +248,11 @@ impl<'a> Compiler<'a> {
         Ok(idx)
     }
 
-    fn compile_grouping(&mut self, lparen: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
+    fn compile_grouping(
+        &mut self,
+        lparen: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
 
         self.consume(|token| matches!(token, Token::RParen), || &[Token::RParen])?;
@@ -261,7 +260,11 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_unary(&mut self, operator: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
+    fn compile_unary(
+        &mut self,
+        operator: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
         self.compile_precedence(Precedence::Unary)?; // operand
 
         match operator.item {
@@ -273,7 +276,11 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_binary(&mut self, operator: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
+    fn compile_binary(
+        &mut self,
+        operator: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
         let precedence = Precedence::from_token(&operator);
 
         self.compile_precedence(precedence.next().unwrap())?;
@@ -310,19 +317,15 @@ impl<'a> Compiler<'a> {
         let can_assign = precedence <= Precedence::Assignment;
         self.compile_prefix(token, can_assign)?;
 
-        while let Some(Ok(token)) = self.lexer.peek() {
-            if precedence > Precedence::from_token(token) {
-                break;
-            }
-            let Some(Ok(infix)) = self.lexer.next() else {
-                unreachable!()
-            };
-
+        while let Some(infix) = self
+            .lexer
+            .next_if(|tok| precedence <= Precedence::from_token(tok))?
+        {
             self.compile_infix(infix, can_assign)?;
         }
 
         if can_assign {
-            if let Some(tok) = self.consume_if(|token| matches!(token, Token::Eq))? {
+            if let Some(tok) = self.lexer.next_if(|token| matches!(token, Token::Eq))? {
                 let kind = CompileErrorKind::InvalidAssignmentTarget;
                 let err = CompileError {
                     span: tok.span,
@@ -378,7 +381,7 @@ impl<'a> Compiler<'a> {
         let idx = self.compile_ident_constant(ident, span)?;
 
         if can_assign {
-            if let Some(tok) = self.consume_if(|tok| matches!(tok, Token::Eq))? {
+            if let Some(tok) = self.lexer.next_if(|tok| matches!(tok, Token::Eq))? {
                 self.compile_expr()?;
                 self.emit(Instruction::SetGlobal(idx.item), idx.span);
 
@@ -442,7 +445,11 @@ impl<'a> Compiler<'a> {
         ]
     }
 
-    fn compile_infix(&mut self, infix: Spanned<Token<'a>>, can_assign: bool) -> Result<(), StaticError<'a>> {
+    fn compile_infix(
+        &mut self,
+        infix: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
         match infix.item {
             Token::Plus
             | Token::Minus

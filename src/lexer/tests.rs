@@ -7,24 +7,23 @@ enum LexerTestErr {
 }
 
 fn check_tokens(lexer: &mut Lexer<'_>, expected: &[Token<'_>]) {
-    let mut count = 0;
-
-    for (t, expected) in lexer.zip(expected) {
-        assert_eq!(&t.unwrap().item, expected);
-        count += 1;
+    let mut expected = expected.into_iter();
+    loop {
+        match (lexer.next().unwrap(), expected.next()) {
+            (Some(t), Some(e)) => assert_eq!(&t.item, e),
+            (None, None) => break,
+            (t, e) => panic!("Expected {:?} but got {:?}", t, e),
+        }
     }
-
-    assert_eq!(count, expected.len());
-    assert!(lexer.next().is_none());
 }
 
 fn check_tokens_with_errors(lexer: &mut Lexer<'_>, expected: &[Result<Token<'_>, LexerTestErr>]) {
-    let mut count = 0;
+    let mut expected = expected.into_iter();
 
-    for t in lexer.zip(expected) {
-        match t {
-            (Ok(t), Ok(expected)) => assert_eq!(&t.item, expected),
-            (Err(e), Err(expected)) => match (e, expected) {
+    loop {
+        match (lexer.next(), expected.next()) {
+            (Ok(Some(t)), Some(Ok(expected))) => assert_eq!(&t.item, expected),
+            (Err(e), Some(Err(expected))) => match (e, expected) {
                 (LexerError::UnknownToken(c), LexerTestErr::UnknownCharacter(expected)) => {
                     let tok = c.token();
                     eprintln!("{:?}", miette::Report::new(c.to_owned()));
@@ -35,13 +34,10 @@ fn check_tokens_with_errors(lexer: &mut Lexer<'_>, expected: &[Result<Token<'_>,
                 }
                 (a, b) => panic!("Expected {:?} but got {:?}", a, b),
             },
+            (Ok(None), None) => break,
             (a, b) => panic!("Expected {:?} but got {:?}", a, b),
         }
-        count += 1;
     }
-
-    assert_eq!(count, expected.len());
-    assert!(lexer.next().is_none());
 }
 
 #[test]
@@ -80,12 +76,12 @@ fn test_comments() {
     use Token as T;
 
     let mut lexer = Lexer::new("!= // some comment");
-    let expected = [T::BangEq];
+    let expected = [T::BangEq, T::Eof];
 
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("!= // some comment\n==()     // another comment");
-    let expected = [T::BangEq, T::EqEq, T::LParen, T::RParen];
+    let expected = [T::BangEq, T::EqEq, T::LParen, T::RParen, T::Eof];
 
     check_tokens(&mut lexer, &expected);
 }
@@ -95,17 +91,23 @@ fn test_strings() {
     use Token as T;
 
     let mut lexer = Lexer::new("\"hello world\"");
-    let expected = [T::String {
-        lexeme: "\"hello world\"",
-        value: "hello world",
-    }];
+    let expected = [
+        T::String {
+            lexeme: "\"hello world\"",
+            value: "hello world",
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("\"\"");
-    let expected = [T::String {
-        lexeme: "\"\"",
-        value: "",
-    }];
+    let expected = [
+        T::String {
+            lexeme: "\"\"",
+            value: "",
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("!,\"hello\n world\".");
@@ -117,6 +119,7 @@ fn test_strings() {
             value: "hello\n world",
         },
         T::Dot,
+        T::Eof,
     ];
     check_tokens(&mut lexer, &expected);
 }
@@ -126,17 +129,23 @@ fn test_non_ascii_strings() {
     use Token as T;
 
     let mut lexer = Lexer::new("\"hello ॐ\"");
-    let expected = [T::String {
-        lexeme: "\"hello ॐ\"",
-        value: "hello ॐ",
-    }];
+    let expected = [
+        T::String {
+            lexeme: "\"hello ॐ\"",
+            value: "hello ॐ",
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("\"hello ॐ€,\"");
-    let expected = [T::String {
-        lexeme: "\"hello ॐ€,\"",
-        value: "hello ॐ€,",
-    }];
+    let expected = [
+        T::String {
+            lexeme: "\"hello ॐ€,\"",
+            value: "hello ॐ€,",
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 }
 
@@ -145,31 +154,43 @@ fn test_numbers() {
     use Token as T;
 
     let mut lexer = Lexer::new("123");
-    let expected = [T::Number {
-        lexeme: "123",
-        value: 123.0,
-    }];
+    let expected = [
+        T::Number {
+            lexeme: "123",
+            value: 123.0,
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("123.0");
-    let expected = [T::Number {
-        lexeme: "123.0",
-        value: 123.0,
-    }];
+    let expected = [
+        T::Number {
+            lexeme: "123.0",
+            value: 123.0,
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("123.456");
-    let expected = [T::Number {
-        lexeme: "123.456",
-        value: 123.456,
-    }];
+    let expected = [
+        T::Number {
+            lexeme: "123.456",
+            value: 123.456,
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 
     let mut lexer = Lexer::new("123.400");
-    let expected = [T::Number {
-        lexeme: "123.400",
-        value: 123.4,
-    }];
+    let expected = [
+        T::Number {
+            lexeme: "123.400",
+            value: 123.4,
+        },
+        T::Eof,
+    ];
     check_tokens(&mut lexer, &expected);
 }
 
@@ -182,6 +203,7 @@ fn test_identifiers() {
         T::Ident("hello"),
         T::Ident("hellow_worl12d"),
         T::Ident("_hello_"),
+        T::Eof,
     ];
     check_tokens(&mut lexer, &expected);
 }
@@ -209,6 +231,7 @@ fn test_keywords() {
         T::Keyword(Keyword::True),
         T::Keyword(Keyword::Var),
         T::Keyword(Keyword::While),
+        T::Eof,
     ];
     check_tokens(&mut lexer, &expected);
 }
@@ -223,6 +246,7 @@ fn test_simple_errors() {
         Err(LexerTestErr::UnknownCharacter('$')),
         Ok(T::Comma),
         Err(LexerTestErr::UnterminatedString),
+        Ok(T::Eof),
     ];
     check_tokens_with_errors(&mut lexer, &expected);
 }

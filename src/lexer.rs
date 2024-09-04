@@ -12,7 +12,7 @@ use crate::common::{Span, Spanned};
 
 pub struct PeekableLexer<'a> {
     lexer: Lexer<'a>,
-    peeked: Option<Result<Spanned<Token<'a>>, LexerError<'a>>>,
+    peeked: Option<Result<Option<Spanned<Token<'a>>>, LexerError<'a>>>,
     line: usize,
 }
 
@@ -25,48 +25,49 @@ impl<'a> PeekableLexer<'a> {
         }
     }
 
-    pub fn peek(&mut self) -> Option<&Result<Spanned<Token<'a>>, LexerError<'a>>> {
+    pub fn peek(&mut self) -> Result<&Option<Spanned<Token<'a>>>, LexerError<'a>> {
         if self.peeked.is_none() {
-            self.peeked = self.lexer.next();
+            self.peeked = Some(self.lexer.next());
         }
-        self.peeked.as_ref()
+       match self.peeked {
+            Some(Ok(ref res)) => Ok(res),
+            Some(Err(ref e)) => Err(e.clone()),
+            None => unreachable!("peeked should be set"),
+       }
     }
 
-    pub fn next_if<F>(&mut self, f: F) -> Option<Result<Spanned<Token<'a>>, LexerError<'a>>>
+    pub fn next_if<F>(&mut self, f: F) -> Result<Option<Spanned<Token<'a>>>, LexerError<'a>>
     where
         F: Fn(&Token<'a>) -> bool,
     {
-        if let Some(peeked) = self.peek().and_then(|res| res.as_ref().ok()) {
-            if f(peeked) {
-                self.line = self.lexer.line();
-                return self.peeked.take();
+        match self.next()? {
+            Some(t) if f(&t) => Ok(Some(t)),
+            Some(t) => {
+                self.peeked = Some(Ok(Some(t)));
+                Ok(None) 
             }
+            None => Ok(None),
         }
-        None
     }
 
-    pub fn is_next<F>(&mut self, f: F) -> bool
+    pub fn is_next<F>(&mut self, f: F) -> Result<bool, LexerError<'a>>
     where
         F: Fn(&Token<'a>) -> bool,
     {
-        if let Some(peeked) = self.peek().and_then(|res| res.as_ref().ok()) {
-            f(peeked)
-        } else {
-            false
+        match self.peek() {
+            Ok(Some(t)) => Ok(f(t)),
+            Ok(None) => Ok(false),
+            Err(e) => Err(e.clone()),
         }
     }
 
     pub fn line(&self) -> usize {
         self.line
     }
-}
 
-impl<'a> Iterator for PeekableLexer<'a> {
-    type Item = Result<Spanned<Token<'a>>, LexerError<'a>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn next(&mut self) -> Result<Option<Spanned<Token<'a>>>, LexerError<'a>> {
         let result = if self.peeked.is_some() {
-            self.peeked.take()
+            self.peeked.take().unwrap() 
         } else {
             self.lexer.next()
         };
@@ -162,20 +163,16 @@ impl<'a> Lexer<'a> {
     pub fn line(&self) -> usize {
         self.line
     }
-}
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Spanned<Token<'a>>, LexerError<'a>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> Result<Option<Spanned<Token<'a>>>, LexerError<'a>> {
         loop {
             let Some((i, c)) = self.chars.next() else {
                 if self.eof {
-                    return None;
+                    return Ok(None);
                 } else {
                     self.eof = true;
                     let span = Span::from_len(self.line, self.input.len(), 1);
-                    return Some(Ok(Spanned::new(Token::Eof, span)));
+                    return Ok(Some(Spanned::new(Token::Eof, span)));
                 }
             };
 
@@ -231,7 +228,7 @@ impl<'a> Iterator for Lexer<'a> {
                             self.line,
                             (i..end + 1).into(),
                         );
-                        return Some(Err(LexerError::UnterminatedString(err)));
+                        return Err(LexerError::UnterminatedString(err));
                     }
 
                     assert!(self.chars.next_if_eq('"').is_some());
@@ -300,12 +297,12 @@ impl<'a> Iterator for Lexer<'a> {
                 _ => {
                     let err =
                         UnexpectedCharacterError::new(self.input, self.line, c, (i, 1).into());
-                    return Some(Err(LexerError::UnknownToken(err)));
+                    return Err(LexerError::UnknownToken(err));
                 }
             };
 
             let span = Span::from_len(self.line, start, token.lexeme().len());
-            return Some(Ok(Spanned::new(token, span)));
+            return Ok(Some(Spanned::new(token, span)));
         }
     }
 }
