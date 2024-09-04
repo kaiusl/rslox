@@ -1,6 +1,7 @@
 use core::panic;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
 use std::ops::{Deref, DerefMut};
 
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
@@ -12,10 +13,13 @@ use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
 
 pub mod error;
 
+#[cfg(test)]
+mod tests;
+
 type Stack<T> = Vec<T>;
 
 #[derive(Debug)]
-pub struct Vm<'a> {
+pub struct Vm<'a, OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub src: &'a str,
     pub constants: Vec<Value>,
     pub spans: HashMap<usize, Span>,
@@ -23,37 +27,89 @@ pub struct Vm<'a> {
     pub stack: Stack<Value>,
     pub strings: HashSet<InternedString>,
     pub globals: HashMap<InternedString, Value>,
+    output: OUT,
+    outerr: OUTERR,
 
     #[cfg(feature = "debug_trace")]
     pub disassembler: Disassembler,
 }
 
 impl<'a> Vm<'a> {
-    pub fn new(src: &'a str, bytecode: ByteCode) -> Vm<'a> {
+    pub fn new() -> Self {
+        Self::with_output(std::io::stdout(), std::io::stderr())
+    }
+}
+
+impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
+    pub fn with_output(output: OUT, outerr: OUTERR) -> Self {
         #[cfg(feature = "debug_trace")]
-        let disassembler = Disassembler::new(&bytecode);
+        let disassembler = Disassembler::new(&ByteCode::new());
 
         Vm {
-            src,
-            constants: bytecode.constants,
-            spans: bytecode.spans,
-            instructions: BytesCursor::new(bytecode.code),
+            src: "",
+            constants: Vec::new(),
+            spans: HashMap::new(),
+            instructions: BytesCursor::new(Vec::new()),
             stack: Stack::new(),
             strings: HashSet::new(),
             globals: HashMap::new(),
+            output,
+            outerr,
 
             #[cfg(feature = "debug_trace")]
             disassembler,
         }
     }
 
-    pub fn run(&mut self) -> Result<(), InterpretError<'a>> {
+    pub fn compile(&mut self, input: &'a str) -> Result<(), ()>
+    where
+        for<'b> &'b mut OUTERR: io::Write,
+    {
+        self.src = input;
+
+        let compiler = crate::compiler::Compiler::from_str(input);
+        let bytecode = match compiler.compile() {
+            Ok(bytecode) => bytecode,
+            Err(err) => {
+                let report = miette::Report::new(err.to_owned());
+                writeln!(&mut self.outerr, "{report:?}").unwrap();
+                return Err(());
+            }
+        };
+
+        #[cfg(feature = "debug_trace")]
+        {
+            self.disassembler = Disassembler::new(&bytecode);
+        }
+
+        self.constants = bytecode.constants;
+        self.spans = bytecode.spans;
+        self.instructions = BytesCursor::new(bytecode.code);
+
+        Ok(())
+    }
+
+    pub fn run(&mut self)
+    where
+        for<'b> &'b mut OUT: io::Write,
+        for<'b> &'b mut OUTERR: io::Write,
+    {
+        if let Err(err) = self.run_core() {
+            let report = miette::Report::new(err.to_owned());
+            writeln!(&mut self.outerr, "{report:?}").unwrap();
+        }
+    }
+
+    fn run_core(&mut self) -> Result<(), RuntimeError<'a>>
+    where
+        for<'b> &'b mut OUT: io::Write,
+    {
         while let Some(op) = self.instructions.u8().map(OpCode::from_u8) {
             #[cfg(feature = "debug_trace")]
             {
-                println!("\n/ [");
+                print!("\n/ [");
                 for slot in self.stack.iter().rev() {
-                    println!("/   {slot}");
+                    print!("/   {slot}");
                 }
                 println!("/ ]");
                 print!("/ ");
@@ -64,7 +120,7 @@ impl<'a> Vm<'a> {
                 OpCode::Return => {
                     let value = self.stack.pop();
                     if let Some(value) = value {
-                        println!("RET: {}", value);
+                        writeln!(&mut self.output, "RET: {}", value).unwrap();
                     }
                 }
                 OpCode::Constant => {
@@ -123,7 +179,7 @@ impl<'a> Vm<'a> {
                         self.stack.push(value.clone());
                     } else {
                         let kind = RuntimeErrorKind::UndefinedVariable { name };
-                        return Err(self.runtime_error(kind, 1));
+                        return Err(self.runtime_error(kind, 2));
                     }
                 }
                 OpCode::SetGlobal => {
@@ -139,7 +195,7 @@ impl<'a> Vm<'a> {
                             let kind = RuntimeErrorKind::UndefinedVariable {
                                 name: entry.into_key(),
                             };
-                            return Err(self.runtime_error(kind, 1));
+                            return Err(self.runtime_error(kind, 2));
                         }
                     }
                 }
@@ -198,7 +254,7 @@ impl<'a> Vm<'a> {
                     let value = self.stack.pop();
                     match value {
                         Some(value) => {
-                            println!("{}", value);
+                            writeln!(&mut self.output, "{}", value).unwrap();
                         }
                         None => {
                             panic!("tried to print with no value on stack, it's a bug in VM or compiler")
@@ -226,7 +282,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn run_binary_add(&mut self) -> Result<(), InterpretError<'a>> {
+    fn run_binary_add(&mut self) -> Result<(), RuntimeError<'a>> {
         let op = Self::add_number;
         let rhs = self.stack.pop();
         let lhs = self.stack.pop();
@@ -263,7 +319,7 @@ impl<'a> Vm<'a> {
     fn binary_arithmetic_op(
         &mut self,
         op: impl Fn(f64, f64) -> f64,
-    ) -> Result<(), InterpretError<'a>> {
+    ) -> Result<(), RuntimeError<'a>> {
         let rhs = self.stack.pop();
         let lhs = self.stack.pop();
         match (lhs, rhs) {
@@ -285,7 +341,7 @@ impl<'a> Vm<'a> {
     }
 
     #[inline]
-    fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), InterpretError<'a>> {
+    fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError<'a>> {
         let rhs = self.stack.pop();
         let lhs = self.stack.pop();
         match (lhs, rhs) {
@@ -335,17 +391,16 @@ impl<'a> Vm<'a> {
         lhs / rhs
     }
 
-    fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> InterpretError<'a> {
+    fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> RuntimeError<'a> {
         let span = self
             .spans
             .get(&(self.instructions.offset() - offset))
             .cloned()
             .unwrap();
-        let err = RuntimeError {
+        RuntimeError {
             kind,
             span,
             src: self.src.into(),
-        };
-        err.into()
+        }
     }
 }
