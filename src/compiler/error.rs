@@ -4,13 +4,13 @@ use std::cell::RefCell;
 use std::ops::DerefMut;
 
 use crate::common::Span;
-use crate::lexer::{LexerError, Token};
+use crate::lexer::{LexerError, Token, TokenKind};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("Static errors")]
 pub struct StaticErrors<'b> {
     #[source_code]
-    src: &'b str,
+    src: Cow<'b, str>,
     #[related]
     errors: Vec<StaticError<'b>>,
 }
@@ -18,7 +18,7 @@ pub struct StaticErrors<'b> {
 impl<'b> StaticErrors<'b> {
     pub fn new(src: &'b str) -> Self {
         Self {
-            src,
+            src: src.into(),
             errors: Vec::new(),
         }
     }
@@ -29,6 +29,13 @@ impl<'b> StaticErrors<'b> {
 
     pub fn is_empty(&self) -> bool {
         self.errors.is_empty()
+    }
+
+    pub fn to_owned(&self) -> StaticErrors<'static> {
+        StaticErrors {
+            src: Cow::Owned(self.src.to_string()),
+            errors: self.errors.iter().map(StaticError::to_owned).collect(),
+        }
     }
 }
 
@@ -41,6 +48,15 @@ pub enum StaticError<'a> {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Compile(CompileError<'a>),
+}
+
+impl StaticError<'_> {
+    pub fn to_owned(&self) -> StaticError<'static> {
+        match self {
+            StaticError::Lexer(err) => StaticError::Lexer(err.to_owned()),
+            StaticError::Compile(err) => StaticError::Compile(err.to_owned()),
+        }
+    }
 }
 
 impl<'a> From<CompileError<'a>> for StaticError<'a> {
@@ -60,44 +76,57 @@ impl<'a> From<LexerError<'a>> for StaticError<'a> {
 pub struct CompileError<'a> {
     #[label("here")]
     pub span: Span,
-    pub kind: CompileErrorKind<'a>,
+    pub kind: CompileErrorKind,
+    marker: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> CompileError<'a> {
+    pub fn new(kind: CompileErrorKind, span: Span) -> Self {
+        Self {
+            span,
+            kind,
+            marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn to_owned(&self) -> CompileError<'static> {
+        CompileError {
+            span: self.span.clone(),
+            kind: self.kind.to_owned(),
+            marker: std::marker::PhantomData,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub enum CompileErrorKind<'src> {
+pub enum CompileErrorKind {
     UnexpectedToken {
-        expected: &'static [Token<'static>],
-        found: Token<'src>,
+        expected: &'static [TokenKind],
+        found: TokenKind,
     },
 
     InvalidAssignmentTarget,
 }
 
-impl fmt::Display for CompileErrorKind<'_> {
+impl fmt::Display for CompileErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CompileErrorKind::UnexpectedToken { expected, found } => {
                 assert!(!expected.is_empty(), "expected at least one expected token");
-                let mut expected = expected.iter().map(|tok| match tok {
-                    Token::Eof => "eof",
-                    Token::Number { .. } => "number",
-                    Token::String { .. } => "string",
-                    Token::Ident { .. } => "identifier",
-                    _ => tok.lexeme(),
-                });
+                let mut expected = expected.iter();
 
                 match expected.len() {
                     1 => write!(
                         f,
                         "expected {:?}, found '{}'",
                         expected.next().unwrap(),
-                        found.lexeme()
+                        found
                     ),
                     _ => write!(
                         f,
                         "expected one of the following: '{}', found '{}'",
                         DisplayIterAsSeparatedList::new(expected, ", "),
-                        found.lexeme()
+                        found
                     ),
                 }
             }
@@ -148,35 +177,22 @@ mod tests {
     #[test]
     fn unexpected_token() -> miette::Result<()> {
         let kind = CompileErrorKind::UnexpectedToken {
-            expected: &[Token::Eof],
-            found: Token::Semicolon,
+            expected: &[TokenKind::Eof],
+            found: TokenKind::Semicolon,
         };
 
-        let err = CompileError {
-            span: Span::from_len(0, 1, 1),
-            kind,
-        };
-
+        let err = CompileError::new(kind, Span::from_len(0, 1, 1));
         Err(miette::Error::from(err).with_source_code("1.2;"))
     }
 
     #[test]
     fn unexpected_tokens() -> miette::Result<()> {
         let kind = CompileErrorKind::UnexpectedToken {
-            expected: &[
-                Token::Number {
-                    lexeme: "1.2",
-                    value: 1.2,
-                },
-                Token::Eof,
-            ],
-            found: Token::Semicolon,
+            expected: &[TokenKind::Number, TokenKind::Eof],
+            found: TokenKind::Semicolon,
         };
 
-        let err = CompileError {
-            span: Span::from_len(0, 1, 1),
-            kind,
-        };
+        let err = CompileError::new(kind, Span::from_len(0, 1, 1));
 
         Err(miette::Error::from(err).with_source_code("1.2;"))
     }

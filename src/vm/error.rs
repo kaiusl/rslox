@@ -38,6 +38,16 @@ pub struct RuntimeError<'a> {
     pub kind: RuntimeErrorKind,
 }
 
+impl RuntimeError<'_> {
+    pub fn to_owned(self) -> RuntimeError<'static> {
+        RuntimeError {
+            src: Cow::Owned(self.src.into_owned()),
+            span: self.span,
+            kind: self.kind,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum RuntimeErrorKind {
     InvalidOperand { expected: &'static str },

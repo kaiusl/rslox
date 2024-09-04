@@ -29,11 +29,11 @@ impl<'a> PeekableLexer<'a> {
         if self.peeked.is_none() {
             self.peeked = Some(self.lexer.next());
         }
-       match self.peeked {
+        match self.peeked {
             Some(Ok(ref res)) => Ok(res),
             Some(Err(ref e)) => Err(e.clone()),
             None => unreachable!("peeked should be set"),
-       }
+        }
     }
 
     pub fn next_if<F>(&mut self, f: F) -> Result<Option<Spanned<Token<'a>>>, LexerError<'a>>
@@ -44,7 +44,7 @@ impl<'a> PeekableLexer<'a> {
             Some(t) if f(&t) => Ok(Some(t)),
             Some(t) => {
                 self.peeked = Some(Ok(Some(t)));
-                Ok(None) 
+                Ok(None)
             }
             None => Ok(None),
         }
@@ -67,7 +67,7 @@ impl<'a> PeekableLexer<'a> {
 
     pub fn next(&mut self) -> Result<Option<Spanned<Token<'a>>>, LexerError<'a>> {
         let result = if self.peeked.is_some() {
-            self.peeked.take().unwrap() 
+            self.peeked.take().unwrap()
         } else {
             self.lexer.next()
         };
@@ -336,7 +336,100 @@ pub enum Token<'a> {
     Eof,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TokenKind {
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Star,
+    Slash,
+    Eq,
+    EqEq,
+    Bang,
+    BangEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    // Literals
+    String,
+    Number,
+    Ident,
+    Keyword(Keyword),
+    Eof,
+}
+
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let rep = match self {
+            TokenKind::LParen => "(",
+            TokenKind::RParen => ")",
+            TokenKind::LBrace => "{",
+            TokenKind::RBrace => "}",
+            TokenKind::Comma => ",",
+            TokenKind::Dot => ".",
+            TokenKind::Minus => "-",
+            TokenKind::Plus => "+",
+            TokenKind::Semicolon => ";",
+            TokenKind::Star => "*",
+            TokenKind::Slash => "/",
+            TokenKind::Eq => "=",
+            TokenKind::EqEq => "==",
+            TokenKind::Bang => "!",
+            TokenKind::BangEq => "!=",
+            TokenKind::Lt => "<",
+            TokenKind::LtEq => "<=",
+            TokenKind::Gt => ">",
+            TokenKind::GtEq => ">=",
+            TokenKind::String => "string",
+            TokenKind::Number => "number",
+            TokenKind::Ident => "ident",
+            TokenKind::Keyword(kw) => kw.lexeme(),
+            TokenKind::Eof => "eof",
+        };
+
+        write!(f, "{}", rep)
+    }
+}
+
+impl<'a> Token<'a> {
+    pub fn as_kind(&self) -> TokenKind {
+        match self {
+            Token::LParen => TokenKind::LParen,
+            Token::RParen => TokenKind::RParen,
+            Token::LBrace => TokenKind::LBrace,
+            Token::RBrace => TokenKind::RBrace,
+            Token::Comma => TokenKind::Comma,
+            Token::Dot => TokenKind::Dot,
+            Token::Minus => TokenKind::Minus,
+            Token::Plus => TokenKind::Plus,
+            Token::Semicolon => TokenKind::Semicolon,
+            Token::Star => TokenKind::Star,
+            Token::Slash => TokenKind::Slash,
+            Token::Eq => TokenKind::Eq,
+            Token::EqEq => TokenKind::EqEq,
+            Token::Bang => TokenKind::Bang,
+            Token::BangEq => TokenKind::BangEq,
+            Token::Lt => TokenKind::Lt,
+            Token::LtEq => TokenKind::LtEq,
+            Token::Gt => TokenKind::Gt,
+            Token::GtEq => TokenKind::GtEq,
+            Token::String { .. } => TokenKind::String,
+            Token::Number { .. } => TokenKind::Number,
+            Token::Ident(_) => TokenKind::Ident,
+            Token::Keyword(kw) => TokenKind::Keyword(kw.clone()),
+            Token::Eof => TokenKind::Eof,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Keyword {
     And,
     Class,

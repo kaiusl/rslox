@@ -1,6 +1,6 @@
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
-use crate::lexer::{Keyword, Lexer, PeekableLexer, Token};
+use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
 use crate::value::{InternedString, Object, Value};
 
 use num_traits::FromPrimitive;
@@ -43,7 +43,7 @@ impl<'a> Compiler<'a> {
             }
         }
 
-        match self.consume(|token| matches!(token, Token::Eof), || &[Token::Eof]) {
+        match self.consume(|token| matches!(token, Token::Eof), || &[TokenKind::Eof]) {
             Ok(_) => (),
             Err(err) => self.errors.push(err),
         };
@@ -89,7 +89,7 @@ impl<'a> Compiler<'a> {
 
         self.consume(
             |token| matches!(token, Token::Semicolon),
-            || &[Token::Semicolon],
+            || &[TokenKind::Semicolon],
         )?;
 
         self.compile_define_variable(const_idx);
@@ -104,7 +104,7 @@ impl<'a> Compiler<'a> {
     fn compile_variable_name(&mut self) -> Result<Spanned<u8>, StaticError<'a>> {
         let ident = self.consume(
             |tok| matches!(tok, Token::Ident { .. }),
-            || &[Token::Ident("")],
+            || &[TokenKind::Ident],
         )?;
 
         match ident.item {
@@ -174,7 +174,7 @@ impl<'a> Compiler<'a> {
         self.compile_expr()?;
         let semicolon = self.consume(
             |tok| matches!(tok, Token::Semicolon),
-            || &[Token::Semicolon],
+            || &[TokenKind::Semicolon],
         )?;
         self.emit(Instruction::Pop, semicolon.span);
         Ok(())
@@ -184,7 +184,7 @@ impl<'a> Compiler<'a> {
         self.compile_expr()?;
         self.consume(
             |tok| matches!(tok, Token::Semicolon),
-            || &[Token::Semicolon],
+            || &[TokenKind::Semicolon],
         )?;
 
         self.emit(Instruction::Print, print.span);
@@ -198,7 +198,7 @@ impl<'a> Compiler<'a> {
     pub fn consume(
         &mut self,
         predicate: impl Fn(&Token<'_>) -> bool,
-        expected_tokens: impl Fn() -> &'static [Token<'static>],
+        expected_tokens: impl Fn() -> &'static [TokenKind],
     ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
         match self.lexer.next()? {
             Some(token) if predicate(&token) => Ok(token),
@@ -208,12 +208,9 @@ impl<'a> Compiler<'a> {
                 // Unexpected token
                 let kind = CompileErrorKind::UnexpectedToken {
                     expected: expected_tokens(),
-                    found: token.item,
+                    found: token.item.as_kind(),
                 };
-                let err = CompileError {
-                    span: token.span,
-                    kind,
-                };
+                let err = CompileError::new(kind, token.span);
 
                 Err(err.into())
             }
@@ -221,12 +218,12 @@ impl<'a> Compiler<'a> {
                 // Unexpected EOF
                 let kind = CompileErrorKind::UnexpectedToken {
                     expected: expected_tokens(),
-                    found: Token::Eof,
+                    found: TokenKind::Eof,
                 };
-                let err = CompileError {
-                    span: Span::from_len(self.lexer.line(), self.source.len() - 1, 1),
+                let err = CompileError::new(
                     kind,
-                };
+                    Span::from_len(self.lexer.line(), self.source.len() - 1, 1),
+                );
 
                 Err(err.into())
             }
@@ -255,7 +252,10 @@ impl<'a> Compiler<'a> {
     ) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
 
-        self.consume(|token| matches!(token, Token::RParen), || &[Token::RParen])?;
+        self.consume(
+            |token| matches!(token, Token::RParen),
+            || &[TokenKind::RParen],
+        )?;
 
         Ok(())
     }
@@ -327,10 +327,7 @@ impl<'a> Compiler<'a> {
         if can_assign {
             if let Some(tok) = self.lexer.next_if(|token| matches!(token, Token::Eq))? {
                 let kind = CompileErrorKind::InvalidAssignmentTarget;
-                let err = CompileError {
-                    span: tok.span,
-                    kind,
-                };
+                let err = CompileError::new(kind, tok.span);
                 return Err(err.into());
             }
         }
@@ -407,23 +404,17 @@ impl<'a> Compiler<'a> {
         )
     }
 
-    const fn prefix_tokens() -> &'static [Token<'static>] {
+    const fn prefix_tokens() -> &'static [TokenKind] {
         &[
-            Token::Number {
-                value: 0.0,
-                lexeme: "0.0",
-            },
-            Token::LParen,
-            Token::Minus,
-            Token::Bang,
-            Token::String {
-                lexeme: "",
-                value: "",
-            },
-            Token::Ident(""),
-            Token::Keyword(Keyword::Nil),
-            Token::Keyword(Keyword::True),
-            Token::Keyword(Keyword::False),
+            TokenKind::Number,
+            TokenKind::LParen,
+            TokenKind::Minus,
+            TokenKind::Bang,
+            TokenKind::String,
+            TokenKind::Ident,
+            TokenKind::Keyword(Keyword::Nil),
+            TokenKind::Keyword(Keyword::True),
+            TokenKind::Keyword(Keyword::False),
         ]
     }
 
