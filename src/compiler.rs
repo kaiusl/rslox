@@ -164,15 +164,43 @@ impl<'a> Compiler<'a> {
     fn compile_stmt(&mut self) -> Result<(), StaticError<'a>> {
         let Some(tok) = self
             .lexer
-            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Print)))?
+            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Print) | Token::LBrace))?
         else {
             return self.compile_expr_stmt();
         };
 
         match tok.item {
             Token::Keyword(Keyword::Print) => self.compile_print_stmt(tok),
+            Token::LBrace => self.compile_block_stmt(tok),
             _ => unreachable!(),
         }
+    }
+
+    fn compile_block_stmt(&mut self, lbrace: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        self.enter_scope();
+        self.compile_block()?;
+        self.exit_scope();
+        Ok(())
+    }
+
+    fn compile_block(&mut self) -> Result<(), StaticError<'a>> {
+        while self.lexer.is_next(|tok| !matches!(tok, Token::RBrace | Token::Eof))? {
+            self.compile_declaration()?;
+        }
+
+        self.consume(
+            |tok| matches!(tok, Token::RBrace),
+            || &[TokenKind::RBrace],
+        )?;
+        Ok(())
+    }
+
+    fn enter_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn exit_scope(&mut self) {
+        self.scope_depth -= 1;
     }
 
     fn compile_expr_stmt(&mut self) -> Result<(), StaticError<'a>> {
