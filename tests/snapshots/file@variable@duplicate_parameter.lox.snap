@@ -1,0 +1,25 @@
+---
+source: tests/common/mod.rs
+description: "fun foo(arg,\n        arg) { // Error at 'arg': Already a variable with this name in this scope.\n  \"body\";\n}\n"
+input_file: crafting_interpreters_test_files/variable/duplicate_parameter.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[1:1]
+ 1 │ fun foo(arg,
+   · ─┬─
+   ·  ╰── here
+ 2 │         arg) { // Error at 'arg': Already a variable with this name in this scope.
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[4:1]
+ 3 │   "body";
+ 4 │ }
+   · ┬
+   · ╰── here
+   ╰────

@@ -1,0 +1,34 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var a = \"outer\";\n  {\n    print a; // expect: outer\n    var a = \"inner\";\n    print a; // expect: inner\n  }\n}"
+input_file: crafting_interpreters_test_files/variable/shadow_and_local.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[1:1]
+ 1 │ {
+   · ┬
+   · ╰── here
+ 2 │   var a = "outer";
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[3:3]
+ 2 │   var a = "outer";
+ 3 │   {
+   ·   ┬
+   ·   ╰── here
+ 4 │     print a; // expect: outer
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[7:3]
+ 6 │     print a; // expect: inner
+ 7 │   }
+   ·   ┬
+   ·   ╰── here
+ 8 │ }
+   ╰────

@@ -1,0 +1,25 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var a = \"a\";\n  print a; // expect: a\n  var b = a + \" b\";\n  print b; // expect: a b\n  var c = a + \" c\";\n  print c; // expect: a c\n  var d = b + \" d\";\n  print d; // expect: a b d\n}\n"
+input_file: crafting_interpreters_test_files/variable/in_middle_of_block.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[1:1]
+ 1 │ {
+   · ┬
+   · ╰── here
+ 2 │   var a = "a";
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[10:1]
+  9 │   print d; // expect: a b d
+ 10 │ }
+    · ┬
+    · ╰── here
+    ╰────

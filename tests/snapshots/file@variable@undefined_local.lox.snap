@@ -1,0 +1,25 @@
+---
+source: tests/common/mod.rs
+description: "{\n  print notDefined;  // expect runtime error: Undefined variable 'notDefined'.\n}\n"
+input_file: crafting_interpreters_test_files/variable/undefined_local.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[1:1]
+ 1 │ {
+   · ┬
+   · ╰── here
+ 2 │   print notDefined;  // expect runtime error: Undefined variable 'notDefined'.
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[3:1]
+ 2 │   print notDefined;  // expect runtime error: Undefined variable 'notDefined'.
+ 3 │ }
+   · ┬
+   · ╰── here
+   ╰────

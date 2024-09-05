@@ -129,11 +129,13 @@ impl<'a> Compiler<'a> {
         loop {
             match self.lexer.peek() {
                 Ok(Some(tok)) => match tok.item {
-                    Token::Eof | Token::Semicolon => {
-                        self.lexer.next();
+                    Token::Semicolon => {
+                        // Semicolon end a statement, so next token is a new statement and we can try parsing again
+                        self.lexer.next().expect("we just checked that it's ok");
                         break;
                     }
-                    Token::Keyword(
+                    Token::Eof // Don't consume EOF, outer loop expects to find one after all the statements have been parsed
+                    | Token::Keyword( // following keywords start a new block/section and we can try parsing again
                         Keyword::Class
                         | Keyword::Fun
                         | Keyword::Var
@@ -144,13 +146,16 @@ impl<'a> Compiler<'a> {
                         | Keyword::Return,
                     ) => break,
                     _ => {
-                        self.lexer.next();
+                        // consume all tokens before next synchronization point
+                         let _ = self.lexer.next();
                     }
                 },
-                Ok(None) => break,
+                Ok(None) => unreachable!(
+                    "Token::Eof should be returned before end, thus None can never happen here"
+                ),
                 Err(_) => {
                     // ignore following error before synchronization point
-                    self.lexer.next();
+                    let _ = self.lexer.next();
                 }
             }
         }

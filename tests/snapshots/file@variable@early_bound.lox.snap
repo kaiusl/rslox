@@ -1,0 +1,50 @@
+---
+source: tests/common/mod.rs
+description: "var a = \"outer\";\n{\n  fun foo() {\n    print a;\n  }\n\n  foo(); // expect: outer\n  var a = \"inner\";\n  foo(); // expect: outer\n}\n"
+input_file: crafting_interpreters_test_files/variable/early_bound.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[2:1]
+ 1 │ var a = "outer";
+ 2 │ {
+   · ┬
+   · ╰── here
+ 3 │   fun foo() {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[3:3]
+ 2 │ {
+ 3 │   fun foo() {
+   ·   ─┬─
+   ·    ╰── here
+ 4 │     print a;
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[5:3]
+ 4 │     print a;
+ 5 │   }
+   ·   ┬
+   ·   ╰── here
+ 6 │ 
+   ╰────
+Error:   × expected Semicolon, found '('
+    ╭─[9:6]
+  8 │   var a = "inner";
+  9 │   foo(); // expect: outer
+    ·      ┬
+    ·      ╰── here
+ 10 │ }
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[10:1]
+  9 │   foo(); // expect: outer
+ 10 │ }
+    · ┬
+    · ╰── here
+    ╰────

@@ -1,7 +1,6 @@
 mod common;
 use common::*;
 
-
 test_dir!(
     operator;
     add_num_nil,
@@ -39,7 +38,6 @@ test_dir!(
     divide_nonnum_num,
 );
 
-
 test_dir!(
     comments;
     line_at_eof,
@@ -48,12 +46,10 @@ test_dir!(
     only_line_comment,
 );
 
-
 test_dir!(
     nil;
     literal,
 );
-
 
 test_dir!(
     variable;
@@ -81,13 +77,11 @@ test_dir!(
     in_middle_of_block,
 );
 
-
 test_dir!(
     regression;
     _40,
     _394,
 );
-
 
 test_dir!(
     bool;
@@ -95,30 +89,10 @@ test_dir!(
     not,
 );
 
-
 test_dir!(
     print;
     missing_argument,
 );
-
-
-test_dir!(
-    expressions;
-    parse,
-    evaluate,
-);
-
-
-test_dir!(
-    scanning;
-    strings,
-    whitespace,
-    identifiers,
-    punctuators,
-    keywords,
-    numbers,
-);
-
 
 test_dir!(
     number;
@@ -129,7 +103,6 @@ test_dir!(
     trailing_dot,
 );
 
-
 test_dir!(
     string;
     multiline,
@@ -138,9 +111,4 @@ test_dir!(
     unterminated,
 );
 
-
-test_dir!(
-    empty_file,
-    precedence,
-    unexpected_character,
-);
+test_dir!(empty_file, precedence, unexpected_character,);

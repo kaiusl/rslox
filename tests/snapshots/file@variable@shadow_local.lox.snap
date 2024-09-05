@@ -1,0 +1,41 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var a = \"local\";\n  {\n    var a = \"shadow\";\n    print a; // expect: shadow\n  }\n  print a; // expect: local\n}\n"
+input_file: crafting_interpreters_test_files/variable/shadow_local.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[1:1]
+ 1 │ {
+   · ┬
+   · ╰── here
+ 2 │   var a = "local";
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[3:3]
+ 2 │   var a = "local";
+ 3 │   {
+   ·   ┬
+   ·   ╰── here
+ 4 │     var a = "shadow";
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[6:3]
+ 5 │     print a; // expect: shadow
+ 6 │   }
+   ·   ┬
+   ·   ╰── here
+ 7 │   print a; // expect: local
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[8:1]
+ 7 │   print a; // expect: local
+ 8 │ }
+   · ┬
+   · ╰── here
+   ╰────
