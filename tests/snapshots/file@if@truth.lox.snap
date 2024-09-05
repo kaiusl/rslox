@@ -1,0 +1,14 @@
+---
+source: tests/common/mod.rs
+description: "// False and nil are false.\nif (false) print \"bad\"; else print \"false\"; // expect: false\nif (nil) print \"bad\"; else print \"nil\"; // expect: nil\n\n// Everything else is true.\nif (true) print true; // expect: true\nif (0) print 0; // expect: 0\nif (\"\") print \"empty\"; // expect: empty\n"
+input_file: crafting_interpreters_test_files/if/truth.lox
+---
+OUT: 
+false
+nil
+true
+0
+empty
+
+===
+ERR:

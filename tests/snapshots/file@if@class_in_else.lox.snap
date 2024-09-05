@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 2] Error at 'class': Expect expression.\nif (true) \"ok\"; else class Foo {}\n"
+input_file: crafting_interpreters_test_files/if/class_in_else.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
+   ╭─[2:22]
+ 1 │ // [line 2] Error at 'class': Expect expression.
+ 2 │ if (true) "ok"; else class Foo {}
+   ·                      ──┬──
+   ·                        ╰── here
+   ╰────

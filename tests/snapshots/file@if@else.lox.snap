@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "// Evaluate the 'else' expression if the condition is false.\nif (true) print \"good\"; else print \"bad\"; // expect: good\nif (false) print \"bad\"; else print \"good\"; // expect: good\n\n// Allow block body.\nif (false) nil; else { print \"block\"; } // expect: block\n"
+input_file: crafting_interpreters_test_files/if/else.lox
+---
+OUT: 
+good
+good
+block
+
+===
+ERR:

@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 2] Error at 'var': Expect expression.\nif (true) \"ok\"; else var foo;\n"
+input_file: crafting_interpreters_test_files/if/var_in_else.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'var'
+   ╭─[2:22]
+ 1 │ // [line 2] Error at 'var': Expect expression.
+ 2 │ if (true) "ok"; else var foo;
+   ·                      ─┬─
+   ·                       ╰── here
+   ╰────

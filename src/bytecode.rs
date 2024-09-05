@@ -51,10 +51,18 @@ impl BytesCursor {
         }
     }
 
+    pub fn skip(&mut self, count: usize) {
+        self.offset += count
+    }
+
     pub fn u8(&mut self) -> Option<u8> {
         let result = self.instructions.get(self.offset).copied();
         self.offset += 1;
         result
+    }
+
+    pub fn peek_u8(&mut self) -> Option<u8> {
+        self.instructions.get(self.offset).copied()
     }
 
     pub fn u16(&mut self) -> Option<u16> {
@@ -116,6 +124,8 @@ pub enum OpCode {
     SetGlobal,
     GetLocal,
     SetLocal,
+    JumpIfFalse,
+    Jump,
 }
 
 impl OpCode {
@@ -151,6 +161,8 @@ pub enum Instruction {
     SetGlobal(u8),
     GetLocal(u8),
     SetLocal(u8),
+    JumpIfFalse(u16),
+    Jump(u16),
 }
 
 impl Instruction {
@@ -177,6 +189,8 @@ impl Instruction {
             Instruction::SetGlobal(_) => OpCode::SetGlobal,
             Instruction::GetLocal(_) => OpCode::GetLocal,
             Instruction::SetLocal(_) => OpCode::SetLocal,
+            Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
+            Instruction::Jump(_) => OpCode::Jump,
         }
     }
 
@@ -207,6 +221,10 @@ impl Instruction {
             | Instruction::GetLocal(idx)
             | Instruction::SetLocal(idx) => {
                 dst.push(*idx);
+            }
+
+            Instruction::JumpIfFalse(offset) | Instruction::Jump(offset) => {
+                dst.extend_from_slice(&offset.to_le_bytes());
             }
         }
     }
@@ -276,6 +294,22 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::JumpIfFalse) => match bytes.u16() {
+                Some(offset) => Instruction::JumpIfFalse(offset),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected offset"),
+                    })
+                }
+            },
+            Some(OpCode::Jump) => match bytes.u16() {
+                Some(offset) => Instruction::Jump(offset),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected offset"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -310,6 +344,10 @@ impl Instruction {
             | Instruction::SetGlobal(idx)
             | Instruction::GetLocal(idx)
             | Instruction::SetLocal(idx) => mem::size_of_val(idx),
+
+            Instruction::JumpIfFalse(offset) | Instruction::Jump(offset) => {
+                mem::size_of_val(offset)
+            }
         }
     }
 }
@@ -338,6 +376,8 @@ impl fmt::Display for Instruction {
             Instruction::SetGlobal(idx) => write!(f, "SET_GLOBAL {}", idx),
             Instruction::GetLocal(idx) => write!(f, "GET_LOCAL {}", idx),
             Instruction::SetLocal(idx) => write!(f, "SET_LOCAL {}", idx),
+            Instruction::JumpIfFalse(offset) => write!(f, "JUMP_IF_FALSE {}", offset),
+            Instruction::Jump(offset) => write!(f, "JUMP {}", offset),
         }
     }
 }

@@ -48,12 +48,13 @@ pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
     ))
 }
 
+// Note that we append _ to the test name so that we can use Rust keywords as $file
 macro_rules! test_dir {
     ($type:tt; $($file:tt),+ $(,)?) => {
         ::paste::paste!{
             #[::rstest::rstest]
             $(
-                #[case::$file(concat!(stringify!($file), ".lox"))]
+                #[case::[<$file _>](concat!(stringify!($file), ".lox"))]
             )+
             fn [<test_ $type>](#[case] path: &str) {
                 test_file(::std::format!("{ROOT}/{}/{}", ::std::stringify!($type), path));
@@ -64,7 +65,7 @@ macro_rules! test_dir {
         ::paste::paste!{
             #[::rstest::rstest]
             $(
-                #[case::$file(concat!(stringify!($file), ".lox"))]
+                #[case::[<$file _>](concat!(stringify!($file), ".lox"))]
             )+
             fn test_root(#[case] path: &str) {
                 test_file(::std::format!("{ROOT}/{}",  path));

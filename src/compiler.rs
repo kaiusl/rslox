@@ -1,3 +1,5 @@
+use std::u16;
+
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
@@ -215,18 +217,69 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_stmt(&mut self) -> Result<(), StaticError<'a>> {
-        let Some(tok) = self
-            .lexer
-            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Print) | Token::LBrace))?
+        let Some(tok) = self.lexer.next_if(|tok| {
+            matches!(
+                tok,
+                Token::Keyword(Keyword::Print | Keyword::If) | Token::LBrace
+            )
+        })?
         else {
             return self.compile_expr_stmt();
         };
 
         match tok.item {
             Token::Keyword(Keyword::Print) => self.compile_print_stmt(tok),
+            Token::Keyword(Keyword::If) => self.compile_if_stmt(tok),
             Token::LBrace => self.compile_block_stmt(tok),
             _ => unreachable!(),
         }
+    }
+
+    fn compile_if_stmt(&mut self, if_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        let lparen = self.consume(|tok| matches!(tok, Token::LParen), || &[TokenKind::LParen])?;
+        self.compile_expr()?;
+        let rparen = self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+
+        let then_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), if_kw.span.clone());
+        self.emit(Instruction::Pop, if_kw.span.clone());
+        self.compile_stmt()?;
+
+        let else_jump = self.emit_jump(Instruction::Jump(u16::MAX), if_kw.span.clone());
+
+        self.patch_jump(then_jump);
+        self.emit(Instruction::Pop, if_kw.span.clone());
+
+        if let Some(else_kw) = self
+            .lexer
+            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Else)))?
+        {
+            self.compile_stmt()?;
+        }
+        self.patch_jump(else_jump);
+
+        Ok(())
+    }
+
+    fn emit_jump(&mut self, instruction: Instruction, span: Span) -> usize {
+        let operand_start = self.bytecode.code.len() + 1;
+        self.emit(instruction, span);
+
+        operand_start
+    }
+
+    fn patch_jump(&mut self, offset: usize) {
+        let jump = self.bytecode.code.len() - offset - (Instruction::JumpIfFalse(0).byte_len() - 1);
+
+        if jump >= u16::MAX as usize {
+            todo!("Too many jumps. Add another op to support more jumps.");
+        }
+
+        let dst = &mut self.bytecode.code[offset..offset + 2];
+        debug_assert!(dst.len() == 2);
+        debug_assert!(dst[0] == 0xff);
+        debug_assert!(dst[1] == 0xff);
+
+        dst.copy_from_slice(&(jump as u16).to_le_bytes());
     }
 
     fn compile_block_stmt(&mut self, lbrace: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {

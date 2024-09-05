@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "// Evaluate the 'then' expression if the condition is true.\nif (true) print \"good\"; // expect: good\nif (false) print \"bad\";\n\n// Allow block body.\nif (true) { print \"block\"; } // expect: block\n\n// Assignment in if condition.\nvar a = false;\nif (a = true) print a; // expect: true\n"
+input_file: crafting_interpreters_test_files/if/if.lox
+---
+OUT: 
+good
+block
+true
+
+===
+ERR:

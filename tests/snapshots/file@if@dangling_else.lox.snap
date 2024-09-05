@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "// A dangling else binds to the right-most if.\nif (true) if (false) print \"bad\"; else print \"good\"; // expect: good\nif (false) if (true) print \"bad\"; else print \"bad\";\n"
+input_file: crafting_interpreters_test_files/if/dangling_else.lox
+---
+OUT: 
+good
+
+===
+ERR:

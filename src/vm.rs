@@ -274,6 +274,18 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                 OpCode::Pop => {
                     self.stack.pop();
                 }
+
+                OpCode::JumpIfFalse => {
+                    let offset = self.instructions.u16().unwrap();
+                    if self.stack.last().unwrap().is_falsey() {
+                        self.instructions.skip(offset as usize);
+                    }
+                }
+
+                OpCode::Jump => {
+                    let offset = self.instructions.u16().unwrap();
+                    self.instructions.skip(offset as usize);
+                }
             }
         }
 

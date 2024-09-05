@@ -5,7 +5,7 @@ use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 fn main() {
-    let input = r#"{var a = "outer"; print a;}"#;
+    let input = r#"if (false) { print 0; print 1; } else { print 2; } print 3;"#;
 
     let compiler = Compiler::from_str(input);
     let bytecode = compiler.compile().unwrap();

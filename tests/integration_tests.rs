@@ -39,6 +39,20 @@ test_dir!(
 );
 
 test_dir!(
+    if;
+    var_in_else,
+    truth,
+    else,
+    dangling_else,
+    class_in_else,
+    var_in_then,
+    fun_in_else,
+    fun_in_then,
+    class_in_then,
+    if,
+);
+
+test_dir!(
     comments;
     line_at_eof,
     only_line_comment_and_line,
