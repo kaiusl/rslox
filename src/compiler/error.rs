@@ -175,18 +175,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unexpected_token() -> miette::Result<()> {
+    fn unexpected_token() {
+        miette::set_hook(Box::new(|_| {
+            Box::new(miette::MietteHandlerOpts::new().color(false).build())
+        })).ok();
+
         let kind = CompileErrorKind::UnexpectedToken {
             expected: &[TokenKind::Eof],
             found: TokenKind::Semicolon,
         };
 
         let err = CompileError::new(kind, Span::from_len(0, 1, 1));
-        Err(miette::Error::from(err).with_source_code("1.2;"))
+        insta::assert_snapshot!(format!(
+            "{:?}",
+            miette::Error::from(err).with_source_code("1.2;")
+        ))
     }
 
     #[test]
-    fn unexpected_tokens() -> miette::Result<()> {
+    fn unexpected_tokens() {
+        miette::set_hook(Box::new(|_| {
+            Box::new(miette::MietteHandlerOpts::new().color(false).build())
+        }))
+        .unwrap();
+
         let kind = CompileErrorKind::UnexpectedToken {
             expected: &[TokenKind::Number, TokenKind::Eof],
             found: TokenKind::Semicolon,
@@ -194,6 +206,11 @@ mod tests {
 
         let err = CompileError::new(kind, Span::from_len(0, 1, 1));
 
-        Err(miette::Error::from(err).with_source_code("1.2;"))
+        insta::assert_snapshot!(format!(
+            "{:?}",
+            miette::Error::from(err).with_source_code("1.2;")
+        ))
     }
+
+    
 }

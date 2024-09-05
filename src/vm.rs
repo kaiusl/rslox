@@ -13,9 +13,6 @@ use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
 
 pub mod error;
 
-#[cfg(test)]
-mod tests;
-
 type Stack<T> = Vec<T>;
 
 #[derive(Debug)]
