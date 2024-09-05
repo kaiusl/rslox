@@ -1,0 +1,25 @@
+---
+source: tests/common/mod.rs
+description: "// [line 3] Error at '{': Expect expression.\n// [line 3] Error at ')': Expect ';' after expression.\nfor ({}; a < 2; a = a + 1) {}\n"
+input_file: crafting_interpreters_test_files/for/statement_initializer.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[3:6]
+ 2 │ // [line 3] Error at ')': Expect ';' after expression.
+ 3 │ for ({}; a < 2; a = a + 1) {}
+   ·      ┬
+   ·      ╰── here
+   ╰────
+Error:   × expected Semicolon, found ')'
+   ╭─[3:26]
+ 2 │ // [line 3] Error at ')': Expect ';' after expression.
+ 3 │ for ({}; a < 2; a = a + 1) {}
+   ·                          ┬
+   ·                          ╰── here
+   ╰────

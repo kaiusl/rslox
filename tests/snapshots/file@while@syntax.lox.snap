@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "// Single-expression body.\nvar c = 0;\nwhile (c < 3) print c = c + 1;\n// expect: 1\n// expect: 2\n// expect: 3\n\n// Block body.\nvar a = 0;\nwhile (a < 3) {\n  print a;\n  a = a + 1;\n}\n// expect: 0\n// expect: 1\n// expect: 2\n\n// Statement bodies.\nwhile (false) if (true) 1; else 2;\nwhile (false) while (true) 1;\nwhile (false) for (;;) 1;\n"
+input_file: crafting_interpreters_test_files/while/syntax.lox
+---
+OUT: 
+1
+2
+3
+0
+1
+2
+
+===
+ERR:

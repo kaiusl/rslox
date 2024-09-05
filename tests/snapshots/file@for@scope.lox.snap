@@ -1,0 +1,13 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var i = \"before\";\n\n  // New variable is in inner scope.\n  for (var i = 0; i < 1; i = i + 1) {\n    print i; // expect: 0\n\n    // Loop body is in second inner scope.\n    var i = -1;\n    print i; // expect: -1\n  }\n}\n\n{\n  // New variable shadows outer variable.\n  for (var i = 0; i > 0; i = i + 1) {}\n\n  // Goes out of scope after loop.\n  var i = \"after\";\n  print i; // expect: after\n\n  // Can reuse an existing variable.\n  for (i = 0; i < 1; i = i + 1) {\n    print i; // expect: 0\n  }\n}\n"
+input_file: crafting_interpreters_test_files/for/scope.lox
+---
+OUT: 
+0
+-1
+after
+0
+
+===
+ERR:

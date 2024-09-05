@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 2] Error at 'fun': Expect expression.\nwhile (true) fun foo() {}\n"
+input_file: crafting_interpreters_test_files/while/fun_in_body.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[2:14]
+ 1 │ // [line 2] Error at 'fun': Expect expression.
+ 2 │ while (true) fun foo() {}
+   ·              ─┬─
+   ·               ╰── here
+   ╰────

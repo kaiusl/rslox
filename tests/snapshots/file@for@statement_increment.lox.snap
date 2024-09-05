@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 2] Error at '{': Expect expression.\nfor (var a = 1; a < 2; {}) {}\n"
+input_file: crafting_interpreters_test_files/for/statement_increment.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
+   ╭─[2:24]
+ 1 │ // [line 2] Error at '{': Expect expression.
+ 2 │ for (var a = 1; a < 2; {}) {}
+   ·                        ┬
+   ·                        ╰── here
+   ╰────

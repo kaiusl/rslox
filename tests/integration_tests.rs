@@ -72,6 +72,22 @@ test_dir!(
 
 
 test_dir!(
+    for;
+    closure_in_body,
+    statement_condition,
+    syntax,
+    fun_in_body,
+    class_in_body,
+    return_inside,
+    statement_initializer,
+    statement_increment,
+    return_closure,
+    var_in_body,
+    scope,
+);
+
+
+test_dir!(
     comments;
     line_at_eof,
     only_line_comment_and_line,
@@ -97,6 +113,18 @@ test_dir!(
 test_dir!(
     nil;
     literal,
+);
+
+
+test_dir!(
+    while;
+    closure_in_body,
+    syntax,
+    fun_in_body,
+    class_in_body,
+    return_inside,
+    return_closure,
+    var_in_body,
 );
 
 

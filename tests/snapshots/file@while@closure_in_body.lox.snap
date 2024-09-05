@@ -1,0 +1,50 @@
+---
+source: tests/common/mod.rs
+description: "var f1;\nvar f2;\nvar f3;\n\nvar i = 1;\nwhile (i < 4) {\n  var j = i;\n  fun f() { print j; }\n\n  if (j == 1) f1 = f;\n  else if (j == 2) f2 = f;\n  else f3 = f;\n\n  i = i + 1;\n}\n\nf1(); // expect: 1\nf2(); // expect: 2\nf3(); // expect: 3\n"
+input_file: crafting_interpreters_test_files/while/closure_in_body.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[8:3]
+ 7 │   var j = i;
+ 8 │   fun f() { print j; }
+   ·   ─┬─
+   ·    ╰── here
+ 9 │ 
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[8:22]
+ 7 │   var j = i;
+ 8 │   fun f() { print j; }
+   ·                      ┬
+   ·                      ╰── here
+ 9 │ 
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[15:1]
+ 14 │   i = i + 1;
+ 15 │ }
+    · ┬
+    · ╰── here
+ 16 │ 
+    ╰────
+Error:   × expected Semicolon, found '('
+    ╭─[18:3]
+ 17 │ f1(); // expect: 1
+ 18 │ f2(); // expect: 2
+    ·   ┬
+    ·   ╰── here
+ 19 │ f3(); // expect: 3
+    ╰────
+Error:   × expected Semicolon, found '('
+    ╭─[19:3]
+ 18 │ f2(); // expect: 2
+ 19 │ f3(); // expect: 3
+    ·   ┬
+    ·   ╰── here
+    ╰────

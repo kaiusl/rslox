@@ -1,0 +1,34 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {\n  while (true) {\n    var i = \"i\";\n    return i;\n  }\n}\n\nprint f();\n// expect: i\n"
+input_file: crafting_interpreters_test_files/while/return_inside.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[1:1]
+ 1 │ fun f() {
+   · ─┬─
+   ·  ╰── here
+ 2 │   while (true) {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
+   ╭─[4:5]
+ 3 │     var i = "i";
+ 4 │     return i;
+   ·     ───┬──
+   ·        ╰── here
+ 5 │   }
+   ╰────
+Error:   × expected Semicolon, found '('
+   ╭─[8:8]
+ 7 │ 
+ 8 │ print f();
+   ·        ┬
+   ·        ╰── here
+ 9 │ // expect: i
+   ╰────

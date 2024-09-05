@@ -1,0 +1,65 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {\n  while (true) {\n    var i = \"i\";\n    fun g() { print i; }\n    return g;\n  }\n}\n\nvar h = f();\nh(); // expect: i\n"
+input_file: crafting_interpreters_test_files/while/return_closure.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[1:1]
+ 1 │ fun f() {
+   · ─┬─
+   ·  ╰── here
+ 2 │   while (true) {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[4:5]
+ 3 │     var i = "i";
+ 4 │     fun g() { print i; }
+   ·     ─┬─
+   ·      ╰── here
+ 5 │     return g;
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[4:24]
+ 3 │     var i = "i";
+ 4 │     fun g() { print i; }
+   ·                        ┬
+   ·                        ╰── here
+ 5 │     return g;
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
+   ╭─[5:5]
+ 4 │     fun g() { print i; }
+ 5 │     return g;
+   ·     ───┬──
+   ·        ╰── here
+ 6 │   }
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[6:3]
+ 5 │     return g;
+ 6 │   }
+   ·   ┬
+   ·   ╰── here
+ 7 │ }
+   ╰────
+Error:   × expected Semicolon, found '('
+    ╭─[9:10]
+  8 │ 
+  9 │ var h = f();
+    ·          ┬
+    ·          ╰── here
+ 10 │ h(); // expect: i
+    ╰────
+Error:   × cannot read local variable in its own initializer
+    ╭─[10:1]
+  9 │ var h = f();
+ 10 │ h(); // expect: i
+    · ┬
+    · ╰── here
+    ╰────

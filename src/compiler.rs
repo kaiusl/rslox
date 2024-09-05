@@ -220,7 +220,8 @@ impl<'a> Compiler<'a> {
         let Some(tok) = self.lexer.next_if(|tok| {
             matches!(
                 tok,
-                Token::Keyword(Keyword::Print | Keyword::If) | Token::LBrace
+                Token::Keyword(Keyword::Print | Keyword::If | Keyword::While | Keyword::For)
+                    | Token::LBrace
             )
         })?
         else {
@@ -230,9 +231,107 @@ impl<'a> Compiler<'a> {
         match tok.item {
             Token::Keyword(Keyword::Print) => self.compile_print_stmt(tok),
             Token::Keyword(Keyword::If) => self.compile_if_stmt(tok),
+            Token::Keyword(Keyword::While) => self.compile_while_stmt(tok),
+            Token::Keyword(Keyword::For) => self.compile_for_stmt(tok),
             Token::LBrace => self.compile_block_stmt(tok),
             _ => unreachable!(),
         }
+    }
+
+    fn compile_for_stmt(&mut self, for_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        self.enter_scope();
+        let lparen = self.consume(|tok| matches!(tok, Token::LParen), || &[TokenKind::LParen])?;
+        match self.lexer.peek()? {
+            Some(tok) if tok.item == Token::Semicolon => {
+                self.consume(
+                    |tok| matches!(tok, Token::Semicolon),
+                    || &[TokenKind::Semicolon],
+                )?;
+            }
+            Some(tok) if tok.item == Token::Keyword(Keyword::Var) => {
+                let tok = self
+                    .lexer
+                    .next()
+                    .expect("we just checked that it's ok")
+                    .expect("we just checked that it's some");
+                self.compile_var_decl(tok)?;
+            }
+            Some(_) => self.compile_expr_stmt()?,
+            None => unreachable!(),
+        }
+
+        let mut loop_start = self.bytecode.code.len();
+        let mut exit_jump = None;
+        if !self.lexer.is_next(|tok| matches!(tok, Token::Semicolon))? {
+            self.compile_expr()?;
+            let semicolon = self.consume(
+                |tok| matches!(tok, Token::Semicolon),
+                || &[TokenKind::Semicolon],
+            )?;
+
+            exit_jump =
+                Some(self.emit_jump(Instruction::JumpIfFalse(u16::MAX), semicolon.span.clone()));
+            self.emit(Instruction::Pop, semicolon.span);
+        } else {
+            self.consume(
+                |tok| matches!(tok, Token::Semicolon),
+                || &[TokenKind::Semicolon],
+            )?;
+        }
+
+        if !self.lexer.is_next(|tok| matches!(tok, Token::RParen))? {
+            let body_jump = self.emit_jump(Instruction::Jump(u16::MAX), for_kw.span.clone());
+            let increment_start = self.bytecode.code.len();
+            self.compile_expr()?;
+            self.emit(Instruction::Pop, for_kw.span.clone());
+            let rparen =
+                self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+
+            self.emit_loop(loop_start, for_kw.span.clone());
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        } else {
+            let rparen =
+                self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+        }
+
+        self.compile_stmt()?;
+        self.emit_loop(loop_start, for_kw.span.clone());
+
+        if let Some(exit_jump) = exit_jump {
+            self.patch_jump(exit_jump);
+            self.emit(Instruction::Pop, for_kw.span.clone());
+        }
+
+        self.exit_scope();
+
+        Ok(())
+    }
+
+    fn compile_while_stmt(&mut self, while_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        let loop_start = self.bytecode.code.len();
+        let lparen = self.consume(|tok| matches!(tok, Token::LParen), || &[TokenKind::LParen])?;
+        self.compile_expr()?;
+        let rparen = self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+
+        let exit_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), while_kw.span.clone());
+        self.emit(Instruction::Pop, while_kw.span.clone());
+        self.compile_stmt()?;
+        self.emit_loop(loop_start, while_kw.span.clone());
+
+        self.patch_jump(exit_jump);
+        self.emit(Instruction::Pop, while_kw.span.clone());
+
+        Ok(())
+    }
+
+    fn emit_loop(&mut self, loop_start: usize, span: Span) {
+        let offset = self.bytecode.code.len() - loop_start + 3;
+        if offset >= u16::MAX as usize {
+            todo!("Too long jump. Add another op to support more jumps.");
+        }
+
+        self.emit(Instruction::Loop(offset as u16), span);
     }
 
     fn compile_if_stmt(&mut self, if_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
@@ -271,7 +370,7 @@ impl<'a> Compiler<'a> {
         let jump = self.bytecode.code.len() - offset - (Instruction::JumpIfFalse(0).byte_len() - 1);
 
         if jump >= u16::MAX as usize {
-            todo!("Too many jumps. Add another op to support more jumps.");
+            todo!("Too long jump. Add another op to support more jumps.");
         }
 
         let dst = &mut self.bytecode.code[offset..offset + 2];

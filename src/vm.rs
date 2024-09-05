@@ -278,13 +278,24 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                 OpCode::JumpIfFalse => {
                     let offset = self.instructions.u16().unwrap();
                     if self.stack.last().unwrap().is_falsey() {
-                        self.instructions.skip(offset as usize);
+                        self.instructions.jump_forward(offset as usize);
                     }
+
+                    //dbg!(OpCode::from_u8(self.instructions.peek_u8().unwrap()));
                 }
 
                 OpCode::Jump => {
                     let offset = self.instructions.u16().unwrap();
-                    self.instructions.skip(offset as usize);
+                    self.instructions.jump_forward(offset as usize);
+
+                    //dbg!(OpCode::from_u8(self.instructions.peek_u8().unwrap()));
+                }
+
+                OpCode::Loop => {
+                    let offset = self.instructions.u16().unwrap();
+                    self.instructions.jump_backward(offset as usize);
+
+                   // dbg!(OpCode::from_u8(self.instructions.peek_u8().unwrap()));
                 }
             }
         }

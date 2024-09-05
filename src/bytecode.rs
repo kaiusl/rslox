@@ -51,8 +51,12 @@ impl BytesCursor {
         }
     }
 
-    pub fn skip(&mut self, count: usize) {
+    pub fn jump_forward(&mut self, count: usize) {
         self.offset += count
+    }
+
+    pub fn jump_backward(&mut self, count: usize) {
+        self.offset -= count
     }
 
     pub fn u8(&mut self) -> Option<u8> {
@@ -126,6 +130,7 @@ pub enum OpCode {
     SetLocal,
     JumpIfFalse,
     Jump,
+    Loop,
 }
 
 impl OpCode {
@@ -163,6 +168,7 @@ pub enum Instruction {
     SetLocal(u8),
     JumpIfFalse(u16),
     Jump(u16),
+    Loop(u16),
 }
 
 impl Instruction {
@@ -191,6 +197,7 @@ impl Instruction {
             Instruction::SetLocal(_) => OpCode::SetLocal,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
             Instruction::Jump(_) => OpCode::Jump,
+            Instruction::Loop(_) => OpCode::Loop,
         }
     }
 
@@ -223,7 +230,9 @@ impl Instruction {
                 dst.push(*idx);
             }
 
-            Instruction::JumpIfFalse(offset) | Instruction::Jump(offset) => {
+            Instruction::JumpIfFalse(offset)
+            | Instruction::Jump(offset)
+            | Instruction::Loop(offset) => {
                 dst.extend_from_slice(&offset.to_le_bytes());
             }
         }
@@ -310,6 +319,14 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::Loop) => match bytes.u16() {
+                Some(offset) => Instruction::Loop(offset),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected offset"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -345,9 +362,9 @@ impl Instruction {
             | Instruction::GetLocal(idx)
             | Instruction::SetLocal(idx) => mem::size_of_val(idx),
 
-            Instruction::JumpIfFalse(offset) | Instruction::Jump(offset) => {
-                mem::size_of_val(offset)
-            }
+            Instruction::JumpIfFalse(offset)
+            | Instruction::Jump(offset)
+            | Instruction::Loop(offset) => mem::size_of_val(offset),
         }
     }
 }
@@ -378,6 +395,7 @@ impl fmt::Display for Instruction {
             Instruction::SetLocal(idx) => write!(f, "SET_LOCAL {}", idx),
             Instruction::JumpIfFalse(offset) => write!(f, "JUMP_IF_FALSE {}", offset),
             Instruction::Jump(offset) => write!(f, "JUMP {}", offset),
+            Instruction::Loop(offset) => write!(f, "LOOP {}", offset),
         }
     }
 }

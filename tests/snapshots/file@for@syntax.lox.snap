@@ -1,0 +1,59 @@
+---
+source: tests/common/mod.rs
+description: "// Single-expression body.\nfor (var c = 0; c < 3;) print c = c + 1;\n// expect: 1\n// expect: 2\n// expect: 3\n\n// Block body.\nfor (var a = 0; a < 3; a = a + 1) {\n  print a;\n}\n// expect: 0\n// expect: 1\n// expect: 2\n\n// No clauses.\nfun foo() {\n  for (;;) return \"done\";\n}\nprint foo(); // expect: done\n\n// No variable.\nvar i = 0;\nfor (; i < 2; i = i + 1) print i;\n// expect: 0\n// expect: 1\n\n// No condition.\nfun bar() {\n  for (var i = 0;; i = i + 1) {\n    print i;\n    if (i >= 2) return;\n  }\n}\nbar();\n// expect: 0\n// expect: 1\n// expect: 2\n\n// No increment.\nfor (var i = 0; i < 2;) {\n  print i;\n  i = i + 1;\n}\n// expect: 0\n// expect: 1\n\n// Statement bodies.\nfor (; false;) if (true) 1; else 2;\nfor (; false;) while (true) 1;\nfor (; false;) for (;;) 1;\n"
+input_file: crafting_interpreters_test_files/for/syntax.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+    ╭─[16:1]
+ 15 │ // No clauses.
+ 16 │ fun foo() {
+    · ─┬─
+    ·  ╰── here
+ 17 │   for (;;) return "done";
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
+    ╭─[17:12]
+ 16 │ fun foo() {
+ 17 │   for (;;) return "done";
+    ·            ───┬──
+    ·               ╰── here
+ 18 │ }
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[18:1]
+ 17 │   for (;;) return "done";
+ 18 │ }
+    · ┬
+    · ╰── here
+ 19 │ print foo(); // expect: done
+    ╰────
+Error:   × expected Semicolon, found '('
+    ╭─[19:10]
+ 18 │ }
+ 19 │ print foo(); // expect: done
+    ·          ┬
+    ·          ╰── here
+ 20 │ 
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+    ╭─[28:1]
+ 27 │ // No condition.
+ 28 │ fun bar() {
+    · ─┬─
+    ·  ╰── here
+ 29 │   for (var i = 0;; i = i + 1) {
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
+    ╭─[31:17]
+ 30 │     print i;
+ 31 │     if (i >= 2) return;
+    ·                 ───┬──
+    ·                    ╰── here
+ 32 │   }
+    ╰────
