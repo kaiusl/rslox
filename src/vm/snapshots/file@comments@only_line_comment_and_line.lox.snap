@@ -1,0 +1,9 @@
+---
+source: src/vm/tests.rs
+description: "// comment\n"
+input_file: test_files/comments/only_line_comment_and_line.lox
+---
+OUT: 
+
+===
+ERR:

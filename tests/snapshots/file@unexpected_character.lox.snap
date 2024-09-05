@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 3] Error: Unexpected character.\n// [java line 3] Error at 'b': Expect ')' after arguments.\nfoo(a | b);\n"
+input_file: test_files/unexpected_character.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected Semicolon, found '('
+   ╭─[3:4]
+ 2 │ // [java line 3] Error at 'b': Expect ')' after arguments.
+ 3 │ foo(a | b);
+   ·    ┬
+   ·    ╰── here
+   ╰────

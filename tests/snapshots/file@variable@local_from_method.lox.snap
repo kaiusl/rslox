@@ -1,0 +1,27 @@
+---
+source: tests/common/mod.rs
+description: "var foo = \"variable\";\n\nclass Foo {\n  method() {\n    print foo;\n  }\n}\n\nFoo().method(); // expect: variable\n"
+input_file: crafting_interpreters_test_files/variable/local_from_method.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
+   ╭─[3:1]
+ 2 │ 
+ 3 │ class Foo {
+   · ──┬──
+   ·   ╰── here
+ 4 │   method() {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[6:3]
+ 5 │     print foo;
+ 6 │   }
+   ·   ┬
+   ·   ╰── here
+ 7 │ }
+   ╰────

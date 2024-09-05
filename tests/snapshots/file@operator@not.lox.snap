@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "print !true;     // expect: false\nprint !false;    // expect: true\nprint !!true;    // expect: true\n\nprint !123;      // expect: false\nprint !0;        // expect: false\n\nprint !nil;     // expect: true\n\nprint !\"\";       // expect: false\n\nfun foo() {}\nprint !foo;      // expect: false\n"
+input_file: crafting_interpreters_test_files/operator/not.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+    ╭─[12:1]
+ 11 │ 
+ 12 │ fun foo() {}
+    · ─┬─
+    ·  ╰── here
+ 13 │ print !foo;      // expect: false
+    ╰────

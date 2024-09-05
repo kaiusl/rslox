@@ -1,0 +1,58 @@
+---
+source: tests/common/mod.rs
+description: "fun caller(g) {\n  g();\n  // g should be a function, not nil.\n  print g == nil; // expect: false\n}\n\nfun callCaller() {\n  var capturedVar = \"before\";\n  var a = \"a\";\n\n  fun f() {\n    // Commenting the next line out prevents the bug!\n    capturedVar = \"after\";\n\n    // Returning anything also fixes it, even nil:\n    //return nil;\n  }\n\n  caller(f);\n}\n\ncallCaller();\n"
+input_file: crafting_interpreters_test_files/regression/_40.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[1:1]
+ 1 │ fun caller(g) {
+   · ─┬─
+   ·  ╰── here
+ 2 │   g();
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[5:1]
+ 4 │   print g == nil; // expect: false
+ 5 │ }
+   · ┬
+   · ╰── here
+ 6 │ 
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+   ╭─[7:1]
+ 6 │ 
+ 7 │ fun callCaller() {
+   · ─┬─
+   ·  ╰── here
+ 8 │   var capturedVar = "before";
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+    ╭─[11:3]
+ 10 │ 
+ 11 │   fun f() {
+    ·   ─┬─
+    ·    ╰── here
+ 12 │     // Commenting the next line out prevents the bug!
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[17:3]
+ 16 │     //return nil;
+ 17 │   }
+    ·   ┬
+    ·   ╰── here
+ 18 │ 
+    ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[20:1]
+ 19 │   caller(f);
+ 20 │ }
+    · ┬
+    · ╰── here
+ 21 │ 
+    ╰────

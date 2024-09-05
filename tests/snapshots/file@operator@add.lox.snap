@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "print 123 + 456; // expect: 579\nprint \"str\" + \"ing\"; // expect: string\n"
+input_file: test_files/operator/add.lox
+---
+OUT: 
+579
+string
+
+===
+ERR:

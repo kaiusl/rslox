@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 2] Error at 'this': Expect variable name.\nvar this = \"value\";\n"
+input_file: test_files/variable/use_this_as_var.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected Ident, found 'this'
+   ╭─[2:5]
+ 1 │ // [line 2] Error at 'this': Expect variable name.
+ 2 │ var this = "value";
+   ·     ──┬─
+   ·       ╰── here
+   ╰────

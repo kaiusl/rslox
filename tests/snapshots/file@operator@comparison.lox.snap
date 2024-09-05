@@ -1,0 +1,29 @@
+---
+source: tests/common/mod.rs
+description: "print 1 < 2;    // expect: true\nprint 2 < 2;    // expect: false\nprint 2 < 1;    // expect: false\n\nprint 1 <= 2;    // expect: true\nprint 2 <= 2;    // expect: true\nprint 2 <= 1;    // expect: false\n\nprint 1 > 2;    // expect: false\nprint 2 > 2;    // expect: false\nprint 2 > 1;    // expect: true\n\nprint 1 >= 2;    // expect: false\nprint 2 >= 2;    // expect: true\nprint 2 >= 1;    // expect: true\n\n// Zero and negative zero compare the same.\nprint 0 < -0; // expect: false\nprint -0 < 0; // expect: false\nprint 0 > -0; // expect: false\nprint -0 > 0; // expect: false\nprint 0 <= -0; // expect: true\nprint -0 <= 0; // expect: true\nprint 0 >= -0; // expect: true\nprint -0 >= 0; // expect: true\n"
+input_file: test_files/operator/comparison.lox
+---
+OUT: 
+true
+false
+false
+true
+true
+false
+false
+false
+true
+false
+true
+true
+false
+false
+false
+false
+true
+true
+true
+true
+
+===
+ERR:

@@ -1,0 +1,25 @@
+---
+source: tests/common/mod.rs
+description: "class Bar {}\nprint !Bar;      // expect: false\nprint !Bar();    // expect: false\n"
+input_file: crafting_interpreters_test_files/operator/not_class.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
+   ╭─[1:1]
+ 1 │ class Bar {}
+   · ──┬──
+   ·   ╰── here
+ 2 │ print !Bar;      // expect: false
+   ╰────
+Error:   × expected Semicolon, found '('
+   ╭─[3:11]
+ 2 │ print !Bar;      // expect: false
+ 3 │ print !Bar();    // expect: false
+   ·           ┬
+   ·           ╰── here
+   ╰────

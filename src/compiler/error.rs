@@ -177,8 +177,15 @@ mod tests {
     #[test]
     fn unexpected_token() {
         miette::set_hook(Box::new(|_| {
-            Box::new(miette::MietteHandlerOpts::new().color(false).build())
-        })).ok();
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .color(false)
+                    .wrap_lines(false)
+                    .break_words(false)
+                    .build(),
+            )
+        }))
+        .ok();
 
         let kind = CompileErrorKind::UnexpectedToken {
             expected: &[TokenKind::Eof],
@@ -195,9 +202,15 @@ mod tests {
     #[test]
     fn unexpected_tokens() {
         miette::set_hook(Box::new(|_| {
-            Box::new(miette::MietteHandlerOpts::new().color(false).build())
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .color(false)
+                    .wrap_lines(false)
+                    .break_words(false)
+                    .build(),
+            )
         }))
-        .unwrap();
+        .ok();
 
         let kind = CompileErrorKind::UnexpectedToken {
             expected: &[TokenKind::Number, TokenKind::Eof],
@@ -211,6 +224,4 @@ mod tests {
             miette::Error::from(err).with_source_code("1.2;")
         ))
     }
-
-    
 }

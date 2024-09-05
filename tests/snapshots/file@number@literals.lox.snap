@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "print 123;     // expect: 123\nprint 987654;  // expect: 987654\nprint 0;       // expect: 0\nprint -0;      // expect: -0\n\nprint 123.456; // expect: 123.456\nprint -0.001;  // expect: -0.001\n"
+input_file: test_files/number/literals.lox
+---
+OUT: 
+123
+987654
+0
+-0
+123.456
+-0.001
+
+===
+ERR:

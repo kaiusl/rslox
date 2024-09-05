@@ -1,0 +1,10 @@
+---
+source: src/vm/tests.rs
+description: "// Unicode characters are allowed in comments.\n//\n// Latin 1 Supplement: £§¶ÜÞ\n// Latin Extended-A: ĐĦŋœ\n// Latin Extended-B: ƂƢƩǁ\n// Other stuff: ឃᢆ᯽₪ℜ↩⊗┺░\n// Emoji: ☃☺♣\n\nprint \"ok\"; // expect: ok\n"
+input_file: test_files/comments/unicode.lox
+---
+OUT: 
+ok
+
+===
+ERR:

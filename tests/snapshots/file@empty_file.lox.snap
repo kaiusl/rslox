@@ -1,0 +1,9 @@
+---
+source: tests/common/mod.rs
+description: ""
+input_file: test_files/empty_file.lox
+---
+OUT: 
+
+===
+ERR:

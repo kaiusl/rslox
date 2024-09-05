@@ -1,0 +1,12 @@
+---
+source: src/vm/tests.rs
+description: "print !true;    // expect: false\nprint !false;   // expect: true\nprint !!true;   // expect: true\n"
+input_file: test_files/bool/not.lox
+---
+OUT: 
+false
+true
+true
+
+===
+ERR:

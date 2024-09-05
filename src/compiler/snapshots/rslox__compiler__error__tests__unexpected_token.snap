@@ -1,0 +1,10 @@
+---
+source: src/compiler/error.rs
+expression: "format!(\"{:?}\", miette::Error::from(err).with_source_code(\"1.2;\"))"
+---
+  × expected Eof, found ';'
+   ╭────
+ 1 │ 1.2;
+   ·  ┬
+   ·  ╰── here
+   ╰────

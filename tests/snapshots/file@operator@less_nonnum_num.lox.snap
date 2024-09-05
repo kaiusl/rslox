@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "\"1\" < 1; // expect runtime error: Operands must be numbers.\n"
+input_file: test_files/operator/less_nonnum_num.lox
+---
+OUT: 
+
+===
+ERR: 
+  × invalid operands, expected number
+   ╭────
+ 1 │ "1" < 1; // expect runtime error: Operands must be numbers.
+   ·     ┬
+   ·     ╰── here
+   ╰────

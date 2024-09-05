@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "print -(3); // expect: -3\nprint --(3); // expect: 3\nprint ---(3); // expect: -3\n"
+input_file: test_files/operator/negate.lox
+---
+OUT: 
+-3
+3
+-3
+
+===
+ERR:

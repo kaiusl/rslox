@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "print \"(\" + \"\" + \")\";   // expect: ()\nprint \"a string\"; // expect: a string\n\n// Non-ASCII.\nprint \"A~¶Þॐஃ\"; // expect: A~¶Þॐஃ\n"
+input_file: test_files/string/literals.lox
+---
+OUT: 
+()
+a string
+A~¶Þॐஃ
+
+===
+ERR:

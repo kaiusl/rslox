@@ -1,0 +1,42 @@
+---
+source: tests/common/mod.rs
+description: "// Bound methods have identity equality.\nclass Foo {\n  method() {}\n}\n\nvar foo = Foo();\nvar fooMethod = foo.method;\n\n// Same bound method.\nprint fooMethod == fooMethod; // expect: true\n\n// Different closurizations.\nprint foo.method == foo.method; // expect: false\n"
+input_file: crafting_interpreters_test_files/operator/equals_method.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
+   ╭─[2:1]
+ 1 │ // Bound methods have identity equality.
+ 2 │ class Foo {
+   · ──┬──
+   ·   ╰── here
+ 3 │   method() {}
+   ╰────
+Error:   × expected Semicolon, found '('
+   ╭─[6:14]
+ 5 │ 
+ 6 │ var foo = Foo();
+   ·              ┬
+   ·              ╰── here
+ 7 │ var fooMethod = foo.method;
+   ╰────
+Error:   × expected Semicolon, found '.'
+   ╭─[7:20]
+ 6 │ var foo = Foo();
+ 7 │ var fooMethod = foo.method;
+   ·                    ┬
+   ·                    ╰── here
+ 8 │ 
+   ╰────
+Error:   × expected Semicolon, found '.'
+    ╭─[13:10]
+ 12 │ // Different closurizations.
+ 13 │ print foo.method == foo.method; // expect: false
+    ·          ┬
+    ·          ╰── here
+    ╰────

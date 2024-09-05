@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "-\"s\"; // expect runtime error: Operand must be a number.\n"
+input_file: test_files/operator/negate_nonnum.lox
+---
+OUT: 
+
+===
+ERR: 
+  × invalid operand, expected a number
+   ╭────
+ 1 │ -"s"; // expect runtime error: Operand must be a number.
+   · ┬
+   · ╰── here
+   ╰────

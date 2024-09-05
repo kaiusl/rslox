@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "print notDefined;  // expect runtime error: Undefined variable 'notDefined'.\n"
+input_file: test_files/variable/undefined_global.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `notDefined`
+   ╭────
+ 1 │ print notDefined;  // expect runtime error: Undefined variable 'notDefined'.
+   ·       ─────┬────
+   ·            ╰── here
+   ╰────

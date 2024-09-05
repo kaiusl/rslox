@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "print nil; // expect: nil\n"
+input_file: test_files/nil/literal.lox
+---
+OUT: 
+nil
+
+===
+ERR:

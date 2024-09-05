@@ -1,0 +1,26 @@
+---
+source: tests/common/mod.rs
+description: "if (false) {\n  print notDefined;\n}\n\nprint \"ok\"; // expect: ok\n"
+input_file: crafting_interpreters_test_files/variable/unreached_undefined.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'if'
+   ╭─[1:1]
+ 1 │ if (false) {
+   · ─┬
+   ·  ╰── here
+ 2 │   print notDefined;
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[3:1]
+ 2 │   print notDefined;
+ 3 │ }
+   · ┬
+   · ╰── here
+ 4 │ 
+   ╰────

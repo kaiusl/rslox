@@ -2,7 +2,13 @@ pub const ROOT: &str = "./crafting_interpreters_test_files";
 
 pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
     miette::set_hook(Box::new(|_| {
-        Box::new(miette::MietteHandlerOpts::new().color(false).build())
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .color(false)
+                .wrap_lines(false)
+                .break_words(false)
+                .build(),
+        )
     }))
     .ok();
 
