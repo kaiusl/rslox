@@ -7,19 +7,11 @@ OUT:
 
 ===
 ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
-   ╭─[1:1]
+  × undefined variable `notDefined`
+   ╭─[2:9]
  1 │ {
-   · ┬
-   · ╰── here
  2 │   print notDefined;  // expect runtime error: Undefined variable 'notDefined'.
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[3:1]
- 2 │   print notDefined;  // expect runtime error: Undefined variable 'notDefined'.
+   ·         ─────┬────
+   ·              ╰── here
  3 │ }
-   · ┬
-   · ╰── here
    ╰────

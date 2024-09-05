@@ -114,6 +114,8 @@ pub enum OpCode {
     DefineGlobal,
     GetGlobal,
     SetGlobal,
+    GetLocal,
+    SetLocal,
 }
 
 impl OpCode {
@@ -147,6 +149,8 @@ pub enum Instruction {
     DefineGlobal(u8),
     GetGlobal(u8),
     SetGlobal(u8),
+    GetLocal(u8),
+    SetLocal(u8),
 }
 
 impl Instruction {
@@ -171,6 +175,8 @@ impl Instruction {
             Instruction::DefineGlobal(_) => OpCode::DefineGlobal,
             Instruction::GetGlobal(_) => OpCode::GetGlobal,
             Instruction::SetGlobal(_) => OpCode::SetGlobal,
+            Instruction::GetLocal(_) => OpCode::GetLocal,
+            Instruction::SetLocal(_) => OpCode::SetLocal,
         }
     }
 
@@ -197,7 +203,9 @@ impl Instruction {
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
             | Instruction::GetGlobal(idx)
-            | Instruction::SetGlobal(idx) => {
+            | Instruction::SetGlobal(idx)
+            | Instruction::GetLocal(idx)
+            | Instruction::SetLocal(idx) => {
                 dst.push(*idx);
             }
         }
@@ -252,6 +260,22 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::GetLocal) => match bytes.u8() {
+                Some(idx) => Instruction::GetLocal(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected local index"),
+                    })
+                }
+            },
+            Some(OpCode::SetLocal) => match bytes.u8() {
+                Some(idx) => Instruction::SetLocal(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected local index"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -283,7 +307,9 @@ impl Instruction {
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
             | Instruction::GetGlobal(idx)
-            | Instruction::SetGlobal(idx) => mem::size_of_val(idx),
+            | Instruction::SetGlobal(idx)
+            | Instruction::GetLocal(idx)
+            | Instruction::SetLocal(idx) => mem::size_of_val(idx),
         }
     }
 }
@@ -310,6 +336,8 @@ impl fmt::Display for Instruction {
             Instruction::DefineGlobal(idx) => write!(f, "DEFINE_GLOBAL {}", idx),
             Instruction::GetGlobal(idx) => write!(f, "GET_GLOBAL {}", idx),
             Instruction::SetGlobal(idx) => write!(f, "SET_GLOBAL {}", idx),
+            Instruction::GetLocal(idx) => write!(f, "GET_LOCAL {}", idx),
+            Instruction::SetLocal(idx) => write!(f, "SET_LOCAL {}", idx),
         }
     }
 }

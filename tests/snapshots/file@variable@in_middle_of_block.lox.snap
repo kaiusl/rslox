@@ -4,22 +4,10 @@ description: "{\n  var a = \"a\";\n  print a; // expect: a\n  var b = a + \" b\"
 input_file: crafting_interpreters_test_files/variable/in_middle_of_block.lox
 ---
 OUT: 
+a
+a b
+a c
+a b d
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
-   ╭─[1:1]
- 1 │ {
-   · ┬
-   · ╰── here
- 2 │   var a = "a";
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[10:1]
-  9 │   print d; // expect: a b d
- 10 │ }
-    · ┬
-    · ╰── here
-    ╰────
+ERR:

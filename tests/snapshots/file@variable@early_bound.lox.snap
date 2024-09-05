@@ -9,14 +9,6 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
-   ╭─[2:1]
- 1 │ var a = "outer";
- 2 │ {
-   · ┬
-   · ╰── here
- 3 │   fun foo() {
-   ╰────
 Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
    ╭─[3:3]
  2 │ {

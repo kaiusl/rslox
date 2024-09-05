@@ -1,11 +1,10 @@
 ---
 source: tests/common/mod.rs
 description: "var a = \"1\";\nvar a = \"2\";\nprint a; // expect: 2\n"
-input_file: test_files/variable/redefine_global.lox
+input_file: crafting_interpreters_test_files/variable/redefine_global.lox
 ---
 OUT: 
 2
-RET: a
 
 ===
 ERR:

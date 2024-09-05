@@ -1,11 +1,10 @@
 ---
 source: tests/common/mod.rs
 description: "var a = \"value\";\nvar a = a;\nprint a; // expect: value\n"
-input_file: test_files/variable/use_global_in_initializer.lox
+input_file: crafting_interpreters_test_files/variable/use_global_in_initializer.lox
 ---
 OUT: 
 value
-RET: a
 
 ===
 ERR:

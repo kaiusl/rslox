@@ -124,6 +124,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_define_variable(&mut self, name: Spanned<u8>) {
         if self.scope_depth > 0 {
+            if let Some(last) = self.locals.last_mut() {
+                last.init = true;
+            }
             return;
         }
 
@@ -154,6 +157,7 @@ impl<'a> Compiler<'a> {
         let local = Local {
             ident,
             depth: self.scope_depth,
+            init: false,
         };
         self.locals.push(local);
 
@@ -463,20 +467,57 @@ impl<'a> Compiler<'a> {
         span: Span,
         can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
-        let idx = self.compile_ident_constant(ident, span)?;
+        let (get, set, span) = match self.resolve_local(ident, span.clone()) {
+            Some(idx) => {
+                let idx = idx?;
+                (
+                    Instruction::GetLocal(idx.item),
+                    Instruction::SetLocal(idx.item),
+                    idx.span,
+                )
+            }
+            None => {
+                let idx = self.compile_ident_constant(ident, span)?;
+                (
+                    Instruction::GetGlobal(idx.item),
+                    Instruction::SetGlobal(idx.item),
+                    idx.span,
+                )
+            }
+        };
 
         if can_assign {
             if let Some(tok) = self.lexer.next_if(|tok| matches!(tok, Token::Eq))? {
                 self.compile_expr()?;
-                self.emit(Instruction::SetGlobal(idx.item), idx.span);
+                self.emit(set, span);
 
                 return Ok(());
             }
         }
 
-        self.emit(Instruction::GetGlobal(idx.item), idx.span);
+        self.emit(get, span);
 
         Ok(())
+    }
+
+    fn resolve_local(
+        &self,
+        ident: &str,
+        span: Span,
+    ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
+        for (i, local) in self.locals.iter().enumerate().rev() {
+            if local.ident.item == ident {
+                assert!(i < u8::MAX as usize);
+                if !local.init {
+                    let kind = CompileErrorKind::UseOfLocalInItsOwnInitializer;
+                    let err = CompileError::new(kind, span);
+                    return Some(Err(err.into()));
+                }
+                return Some(Ok(local.ident.map(|_| i as u8)));
+            }
+        }
+
+        None
     }
 
     fn has_prefix_rule(token: &Token<'_>) -> bool {
@@ -581,4 +622,5 @@ impl Precedence {
 pub struct Local {
     pub ident: Spanned<String>,
     pub depth: usize,
+    pub init: bool,
 }

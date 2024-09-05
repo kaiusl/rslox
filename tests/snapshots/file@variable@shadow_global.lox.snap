@@ -4,24 +4,8 @@ description: "var a = \"global\";\n{\n  var a = \"shadow\";\n  print a; // expec
 input_file: crafting_interpreters_test_files/variable/shadow_global.lox
 ---
 OUT: 
+shadow
+global
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
-   ╭─[2:1]
- 1 │ var a = "global";
- 2 │ {
-   · ┬
-   · ╰── here
- 3 │   var a = "shadow";
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[5:1]
- 4 │   print a; // expect: shadow
- 5 │ }
-   · ┬
-   · ╰── here
- 6 │ print a; // expect: global
-   ╰────
+ERR:

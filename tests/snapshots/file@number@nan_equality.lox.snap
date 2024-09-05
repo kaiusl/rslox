@@ -1,14 +1,13 @@
 ---
 source: tests/common/mod.rs
 description: "var nan = 0/0;\n\nprint nan == 0; // expect: false\nprint nan != 1; // expect: true\n\n// NaN is not equal to self.\nprint nan == nan; // expect: false\nprint nan != nan; // expect: true\n"
-input_file: test_files/number/nan_equality.lox
+input_file: crafting_interpreters_test_files/number/nan_equality.lox
 ---
 OUT: 
 false
 true
 false
 true
-RET: NaN
 
 ===
 ERR:

@@ -9,18 +9,11 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
-   ╭─[2:1]
- 1 │ var a = "outer";
+Error:   × cannot read local variable in its own initializer
+   ╭─[3:11]
  2 │ {
-   · ┬
-   · ╰── here
  3 │   var a = a; // Error at 'a': Can't read local variable in its own initializer.
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[4:1]
- 3 │   var a = a; // Error at 'a': Can't read local variable in its own initializer.
+   ·           ┬
+   ·           ╰── here
  4 │ }
-   · ┬
-   · ╰── here
    ╰────

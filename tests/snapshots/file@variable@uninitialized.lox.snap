@@ -1,11 +1,10 @@
 ---
 source: tests/common/mod.rs
 description: "var a;\nprint a; // expect: nil\n"
-input_file: test_files/variable/uninitialized.lox
+input_file: crafting_interpreters_test_files/variable/uninitialized.lox
 ---
 OUT: 
 nil
-RET: a
 
 ===
 ERR:

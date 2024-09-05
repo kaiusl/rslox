@@ -1,13 +1,12 @@
 ---
 source: tests/common/mod.rs
 description: "var a = \"1\n2\n3\";\nprint a;\n// expect: 1\n// expect: 2\n// expect: 3\n"
-input_file: test_files/string/multiline.lox
+input_file: crafting_interpreters_test_files/string/multiline.lox
 ---
 OUT: 
 1
 2
 3
-RET: a
 
 ===
 ERR:

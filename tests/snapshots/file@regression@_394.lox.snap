@@ -9,13 +9,6 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '{'
-   ╭─[1:1]
- 1 │ {
-   · ┬
-   · ╰── here
- 2 │   class A {}
-   ╰────
 Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
    ╭─[2:3]
  1 │ {

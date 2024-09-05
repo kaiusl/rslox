@@ -109,6 +109,7 @@ pub enum CompileErrorKind {
     ReassignmentOfVariableInLocalScope {
         ident: String,
     },
+    UseOfLocalInItsOwnInitializer,
 }
 
 impl fmt::Display for CompileErrorKind {
@@ -137,7 +138,15 @@ impl fmt::Display for CompileErrorKind {
             CompileErrorKind::InvalidAssignmentTarget => write!(f, "invalid assignment target"),
 
             CompileErrorKind::ReassignmentOfVariableInLocalScope { ident } => {
-                write!(f, "variable with name '{}' is already defined in this scope", ident)
+                write!(
+                    f,
+                    "variable with name '{}' is already defined in this scope",
+                    ident
+                )
+            }
+
+            CompileErrorKind::UseOfLocalInItsOwnInitializer => {
+                write!(f, "cannot read local variable in its own initializer")
             }
         }
     }

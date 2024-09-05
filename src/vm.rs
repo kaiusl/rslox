@@ -196,6 +196,18 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                         }
                     }
                 }
+                OpCode::GetLocal => {
+                    let slot = self.instructions.u8().unwrap();
+
+                    let Some(value) = self.stack.get(slot as usize) else {
+                        panic!("tried to get local with no value on stack, it's a bug in VM or compiler")
+                    };
+                    self.stack.push(value.clone());
+                }
+                OpCode::SetLocal => {
+                    let slot = self.instructions.u8().unwrap();
+                    self.stack[slot as usize] = self.stack.last().unwrap().clone();
+                }
                 OpCode::Negate => {
                     let value = self.stack.pop();
                     match value {
