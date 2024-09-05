@@ -165,11 +165,13 @@ impl<'a> Compiler<'a> {
         ident: &str,
         span: Span,
     ) -> Result<Spanned<u8>, StaticError<'a>> {
-        self.compile_constant(
-            Value::new_object(Object::String(InternedString::new(ident.to_string()))),
-            span.clone(),
-        )
-        .map(|idx| Spanned::new(idx, span))
+        let ident = Value::new_object(Object::String(InternedString::new(ident.to_string())));
+        let idx = self.bytecode.add_constant(ident);
+        let Ok(idx) = u8::try_from(idx) else {
+            todo!("Too many constants. Add another op to support more constants.");
+        };
+
+        Ok(Spanned::new(idx, span))
     }
 
     fn synchronize(&mut self) {
