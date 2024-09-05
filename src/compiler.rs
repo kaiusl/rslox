@@ -15,6 +15,9 @@ pub struct Compiler<'a> {
     pub lexer: PeekableLexer<'a>,
     pub bytecode: ByteCode,
     pub errors: StaticErrors<'a>,
+
+    pub locals: Vec<Local>,
+    pub scope_depth: usize,
 }
 
 impl<'a> Compiler<'a> {
@@ -24,6 +27,9 @@ impl<'a> Compiler<'a> {
             lexer: PeekableLexer::new(Lexer::new(source)),
             bytecode: ByteCode::new(),
             errors: StaticErrors::new(source),
+
+            locals: Vec::new(),
+            scope_depth: 0,
         }
     }
 
@@ -97,20 +103,61 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_define_variable(&mut self, name: Spanned<u8>) {
-        self.emit(Instruction::DefineGlobal(name.item), name.span);
-    }
-
     fn compile_variable_name(&mut self) -> Result<Spanned<u8>, StaticError<'a>> {
         let ident = self.consume(
             |tok| matches!(tok, Token::Ident { .. }),
             || &[TokenKind::Ident],
         )?;
 
+        self.declare_variable(
+            ident.map(|ident| ident.clone().try_into_ident().unwrap().to_string()),
+        )?;
+        if self.scope_depth > 0 {
+            return Ok(ident.map_into(|_| 0));
+        }
+
         match ident.item {
-            Token::Ident(s) => self.compile_ident_constant(&s, ident.span),
+            Token::Ident(s) => self.compile_ident_constant(s, ident.span),
             _ => unreachable!(),
         }
+    }
+
+    fn compile_define_variable(&mut self, name: Spanned<u8>) {
+        if self.scope_depth > 0 {
+            return;
+        }
+
+        self.emit(Instruction::DefineGlobal(name.item), name.span);
+    }
+
+    fn declare_variable(&mut self, ident: Spanned<String>) -> Result<(), StaticError<'a>> {
+        if self.scope_depth == 0 {
+            return Ok(());
+        }
+
+        if self.locals.len() == u8::MAX as usize {
+            todo!("Support more than 255 locals")
+        }
+
+        for local in self.locals.iter().rev() {
+            if local.depth < self.scope_depth {
+                break;
+            }
+            if local.ident.item == ident.item {
+                let kind =
+                    CompileErrorKind::ReassignmentOfVariableInLocalScope { ident: ident.item };
+                let err = CompileError::new(kind, ident.span);
+                return Err(err.into());
+            }
+        }
+
+        let local = Local {
+            ident,
+            depth: self.scope_depth,
+        };
+        self.locals.push(local);
+
+        Ok(())
     }
 
     fn compile_ident_constant(
@@ -184,14 +231,14 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_block(&mut self) -> Result<(), StaticError<'a>> {
-        while self.lexer.is_next(|tok| !matches!(tok, Token::RBrace | Token::Eof))? {
+        while self
+            .lexer
+            .is_next(|tok| !matches!(tok, Token::RBrace | Token::Eof))?
+        {
             self.compile_declaration()?;
         }
 
-        self.consume(
-            |tok| matches!(tok, Token::RBrace),
-            || &[TokenKind::RBrace],
-        )?;
+        self.consume(|tok| matches!(tok, Token::RBrace), || &[TokenKind::RBrace])?;
         Ok(())
     }
 
@@ -200,6 +247,12 @@ impl<'a> Compiler<'a> {
     }
 
     fn exit_scope(&mut self) {
+        while self.locals.last().map(|l| l.depth) == Some(self.scope_depth) {
+            self.locals.pop();
+
+            self.emit(Instruction::Pop, Span::new(0, 0, 0));
+        }
+
         self.scope_depth -= 1;
     }
 
@@ -520,4 +573,10 @@ impl Precedence {
             _ => Self::None,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Local {
+    pub ident: Spanned<String>,
+    pub depth: usize,
 }
