@@ -634,8 +634,38 @@ impl<'a> Compiler<'a> {
             | Token::GtEq
             | Token::Lt
             | Token::LtEq => self.compile_binary(infix, can_assign),
+            Token::Keyword(Keyword::And) => self.compile_and(infix, can_assign),
+            Token::Keyword(Keyword::Or) => self.compile_or(infix, can_assign),
             _ => unreachable!("Invalid infix operator."),
         }
+    }
+
+    fn compile_and(
+        &mut self,
+        and: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
+        let end_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), and.span.clone());
+        self.emit(Instruction::Pop, and.span);
+        self.compile_precedence(Precedence::And)?;
+        self.patch_jump(end_jump);
+
+        Ok(())
+    }
+
+    fn compile_or(
+        &mut self,
+        or: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
+        let else_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), or.span.clone());
+        let end_jump = self.emit_jump(Instruction::Jump(u16::MAX), or.span.clone());
+        self.patch_jump(else_jump);
+        self.emit(Instruction::Pop, or.span);
+        self.compile_precedence(Precedence::Or)?;
+        self.patch_jump(end_jump);
+
+        Ok(())
     }
 }
 
@@ -665,6 +695,8 @@ impl Precedence {
             Token::Star | Token::Slash => Self::Factor,
             Token::BangEq | Token::EqEq => Precedence::Equality,
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Precedence::Comparison,
+            Token::Keyword(Keyword::And) => Precedence::And,
+            Token::Keyword(Keyword::Or) => Precedence::Or,
 
             _ => Self::None,
         }

@@ -1,0 +1,14 @@
+---
+source: tests/common/mod.rs
+description: "// False and nil are false.\nprint false and \"bad\"; // expect: false\nprint nil and \"bad\"; // expect: nil\n\n// Everything else is true.\nprint true and \"ok\"; // expect: ok\nprint 0 and \"ok\"; // expect: ok\nprint \"\" and \"ok\"; // expect: ok\n"
+input_file: crafting_interpreters_test_files/logical_operator/and_truth.lox
+---
+OUT: 
+false
+nil
+ok
+ok
+ok
+
+===
+ERR:

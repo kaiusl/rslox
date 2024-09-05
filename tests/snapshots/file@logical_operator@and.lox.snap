@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "// Note: These tests implicitly depend on ints being truthy.\n\n// Return the first non-true argument.\nprint false and 1; // expect: false\nprint true and 1; // expect: 1\nprint 1 and 2 and false; // expect: false\n\n// Return the last argument if all are true.\nprint 1 and true; // expect: true\nprint 1 and 2 and 3; // expect: 3\n\n// Short-circuit at the first false argument.\nvar a = \"before\";\nvar b = \"before\";\n(a = true) and\n    (b = false) and\n    (a = \"bad\");\nprint a; // expect: true\nprint b; // expect: false\n"
+input_file: crafting_interpreters_test_files/logical_operator/and.lox
+---
+OUT: 
+false
+1
+false
+true
+3
+true
+false
+
+===
+ERR:

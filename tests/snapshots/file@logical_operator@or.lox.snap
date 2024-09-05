@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "// Note: These tests implicitly depend on ints being truthy.\n\n// Return the first true argument.\nprint 1 or true; // expect: 1\nprint false or 1; // expect: 1\nprint false or false or true; // expect: true\n\n// Return the last argument if all are false.\nprint false or false; // expect: false\nprint false or false or false; // expect: false\n\n// Short-circuit at the first true argument.\nvar a = \"before\";\nvar b = \"before\";\n(a = false) or\n    (b = true) or\n    (a = \"bad\");\nprint a; // expect: false\nprint b; // expect: true\n"
+input_file: crafting_interpreters_test_files/logical_operator/or.lox
+---
+OUT: 
+1
+1
+true
+false
+false
+false
+true
+
+===
+ERR:

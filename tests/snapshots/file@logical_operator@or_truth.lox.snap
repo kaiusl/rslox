@@ -1,0 +1,14 @@
+---
+source: tests/common/mod.rs
+description: "// False and nil are false.\nprint false or \"ok\"; // expect: ok\nprint nil or \"ok\"; // expect: ok\n\n// Everything else is true.\nprint true or \"ok\"; // expect: true\nprint 0 or \"ok\"; // expect: 0\nprint \"s\" or \"ok\"; // expect: s\n"
+input_file: crafting_interpreters_test_files/logical_operator/or_truth.lox
+---
+OUT: 
+ok
+ok
+true
+0
+s
+
+===
+ERR:
