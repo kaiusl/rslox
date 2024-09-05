@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "var a = \"outer\";\n\n{\n  var a = \"inner\";\n  print a; // expect: inner\n}\n\nprint a; // expect: outer\n"
+input_file: crafting_interpreters_test_files/block/scope.lox
+---
+OUT: 
+inner
+outer
+
+===
+ERR:

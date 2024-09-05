@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "unknown = \"what\"; // expect runtime error: Undefined variable 'unknown'.\n"
+input_file: crafting_interpreters_test_files/assignment/undefined.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `unknown`
+   ╭────
+ 1 │ unknown = "what"; // expect runtime error: Undefined variable 'unknown'.
+   · ───┬───
+   ·    ╰── here
+   ╰────

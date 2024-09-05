@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "var a = \"a\";\nvar b = \"b\";\nvar c = \"c\";\n\n// Assignment is right-associative.\na = b = c;\nprint a; // expect: c\nprint b; // expect: c\nprint c; // expect: c\n"
+input_file: crafting_interpreters_test_files/assignment/associativity.lox
+---
+OUT: 
+c
+c
+c
+
+===
+ERR:

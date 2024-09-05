@@ -1,0 +1,26 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  Foo() {\n    this = \"value\"; // Error at '=': Invalid assignment target.\n  }\n}\n\nFoo();\n"
+input_file: crafting_interpreters_test_files/assignment/to_this.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
+   ╭─[1:1]
+ 1 │ class Foo {
+   · ──┬──
+   ·   ╰── here
+ 2 │   Foo() {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[4:3]
+ 3 │     this = "value"; // Error at '=': Invalid assignment target.
+ 4 │   }
+   ·   ┬
+   ·   ╰── here
+ 5 │ }
+   ╰────

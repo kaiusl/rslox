@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "// Assignment on RHS of variable.\nvar a = \"before\";\nvar c = a = \"var\";\nprint a; // expect: var\nprint c; // expect: var\n"
+input_file: crafting_interpreters_test_files/assignment/syntax.lox
+---
+OUT: 
+var
+var
+
+===
+ERR:

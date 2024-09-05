@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "{} // By itself.\n\n// In a statement.\nif (true) {}\nif (false) {} else {}\n\nprint \"ok\"; // expect: ok\n"
+input_file: crafting_interpreters_test_files/block/empty.lox
+---
+OUT: 
+ok
+
+===
+ERR:

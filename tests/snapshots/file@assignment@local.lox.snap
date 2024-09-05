@@ -1,0 +1,13 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var a = \"before\";\n  print a; // expect: before\n\n  a = \"after\";\n  print a; // expect: after\n\n  print a = \"arg\"; // expect: arg\n  print a; // expect: arg\n}\n"
+input_file: crafting_interpreters_test_files/assignment/local.lox
+---
+OUT: 
+before
+after
+arg
+arg
+
+===
+ERR:

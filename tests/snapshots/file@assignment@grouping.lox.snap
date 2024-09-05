@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "var a = \"a\";\n(a) = \"value\"; // Error at '=': Invalid assignment target.\n"
+input_file: crafting_interpreters_test_files/assignment/grouping.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × invalid assignment target
+   ╭─[2:5]
+ 1 │ var a = "a";
+ 2 │ (a) = "value"; // Error at '=': Invalid assignment target.
+   ·     ┬
+   ·     ╰── here
+   ╰────

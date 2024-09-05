@@ -41,6 +41,13 @@ test_dir!(
 
 
 test_dir!(
+    block;
+    scope,
+    empty,
+);
+
+
+test_dir!(
     if;
     var_in_else,
     truth,
@@ -70,6 +77,20 @@ test_dir!(
     only_line_comment_and_line,
     unicode,
     only_line_comment,
+);
+
+
+test_dir!(
+    assignment;
+    associativity,
+    to_this,
+    undefined,
+    syntax,
+    prefix_operator,
+    grouping,
+    local,
+    infix_operator,
+    global,
 );
 
 

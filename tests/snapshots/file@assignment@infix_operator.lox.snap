@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "var a = \"a\";\nvar b = \"b\";\na + b = \"value\"; // Error at '=': Invalid assignment target.\n"
+input_file: crafting_interpreters_test_files/assignment/infix_operator.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × invalid assignment target
+   ╭─[3:7]
+ 2 │ var b = "b";
+ 3 │ a + b = "value"; // Error at '=': Invalid assignment target.
+   ·       ┬
+   ·       ╰── here
+   ╰────
