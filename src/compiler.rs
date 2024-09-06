@@ -37,11 +37,11 @@ pub struct CompileUnit {
 }
 
 impl CompileUnit {
-    pub fn new(ty: FunType) -> Self {
+    pub fn new(ty: FunType, ident: Spanned<String>) -> Self {
         //locals[0] is for VM's internal use
         let mut locals = Vec::with_capacity(1);
         locals.push(Local {
-            ident: Spanned::new(String::from("this"), Span::from_len(0, 0, 0)),
+            ident,
             depth: 0,
             init: true,
         });
@@ -69,7 +69,10 @@ impl<'a> Compiler<'a> {
             source,
             lexer: PeekableLexer::new(Lexer::new(source)),
             errors: StaticErrors::new(source),
-            chunk: CompileUnit::new(FunType::Script),
+            chunk: CompileUnit::new(
+                FunType::Script,
+                Spanned::new(String::from("main"), Span::from_len(0, 0, 0)),
+            ),
             constants: Vec::new(),
         }
     }
@@ -134,7 +137,14 @@ impl<'a> Compiler<'a> {
 
     fn compile_fun_decl(&mut self, fun_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let (ident, idx, ident_span) = self.compile_variable_name()?;
-        self.compile_function(fun_kw, ident, FunType::Function)?;
+        if let Some(last) = self.chunk.locals.last_mut() {
+            last.init = true;
+        }
+        self.compile_function(
+            fun_kw,
+            Spanned::new(ident.to_string(), ident_span.clone()),
+            FunType::Function,
+        )?;
         self.compile_define_variable(Spanned::new(idx, ident_span));
 
         Ok(())
@@ -143,10 +153,11 @@ impl<'a> Compiler<'a> {
     fn compile_function(
         &mut self,
         fun_kw: Spanned<Token<'a>>,
-        name: &str,
+        name: Spanned<String>,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
-        let prev_chunk = std::mem::replace(&mut self.chunk, CompileUnit::new(fun_type));
+        let prev_chunk =
+            std::mem::replace(&mut self.chunk, CompileUnit::new(fun_type, name.clone()));
 
         let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
 
@@ -186,7 +197,7 @@ impl<'a> Compiler<'a> {
         self.exit_scope();
         let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
         let fun = ObjFunction {
-            name: InternedString::new(name.into()),
+            name: InternedString::new(name.item),
             arity,
             bytecode: function_bytecode.bytecode,
         };

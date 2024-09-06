@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "{\n  fun fib(n) {\n    if (n < 2) return n;\n    return fib(n - 1) + fib(n - 2);\n  }\n\n  print fib(8); // expect: 21\n}\n"
+input_file: crafting_interpreters_test_files/function/local_recursion.lox
+---
+OUT: 
+21
+
+===
+ERR:
