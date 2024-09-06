@@ -399,7 +399,7 @@ impl fmt::Display for TokenKind {
 }
 
 impl<'a> Token<'a> {
-    pub fn as_kind(&self) -> TokenKind {
+    pub const fn as_kind(&self) -> TokenKind {
         match self {
             Token::LParen => TokenKind::LParen,
             Token::RParen => TokenKind::RParen,
@@ -423,9 +423,75 @@ impl<'a> Token<'a> {
             Token::String { .. } => TokenKind::String,
             Token::Number { .. } => TokenKind::Number,
             Token::Ident(_) => TokenKind::Ident,
-            Token::Keyword(kw) => TokenKind::Keyword(kw.clone()),
+            Token::Keyword(kw) => TokenKind::Keyword(*kw),
             Token::Eof => TokenKind::Eof,
         }
+    }
+
+    /// Returns `true` if the token is [`LParen`].
+    ///
+    /// [`LParen`]: Token::LParen
+    #[must_use]
+    pub fn is_lparen(&self) -> bool {
+        matches!(self, Self::LParen)
+    }
+
+    /// Returns `true` if the token is [`RParen`].
+    ///
+    /// [`RParen`]: Token::RParen
+    #[must_use]
+    pub fn is_rparen(&self) -> bool {
+        matches!(self, Self::RParen)
+    }
+
+    /// Returns `true` if the token is [`RBrace`].
+    ///
+    /// [`RBrace`]: Token::RBrace
+    #[must_use]
+    pub fn is_rbrace(&self) -> bool {
+        matches!(self, Self::RBrace)
+    }
+
+    /// Returns `true` if the token is [`Semicolon`].
+    ///
+    /// [`Semicolon`]: Token::Semicolon
+    #[must_use]
+    pub fn is_semicolon(&self) -> bool {
+        matches!(self, Self::Semicolon)
+    }
+
+    /// Returns `true` if the token is [`Ident`].
+    ///
+    /// [`Ident`]: Token::Ident
+    #[must_use]
+    pub fn is_ident(&self) -> bool {
+        matches!(self, Self::Ident(..))
+    }
+
+    /// Returns `true` if the token is [`Eof`].
+    ///
+    /// [`Eof`]: Token::Eof
+    #[must_use]
+    pub fn is_eof(&self) -> bool {
+        matches!(self, Self::Eof)
+    }
+
+    /// Returns `true` if the token is [`Eq`].
+    ///
+    /// [`Eq`]: Token::Eq
+    #[must_use]
+    pub fn is_eq(&self) -> bool {
+        matches!(self, Self::Eq)
+    }
+
+    #[must_use]
+    pub fn is_var(&self) -> bool {
+        matches!(self, Self::Keyword(Keyword::Var))
+    }
+
+    #[must_use]
+    pub fn is_else(&self) -> bool {
+        matches!(self, Self::Keyword(Keyword::Else))
     }
 }
 

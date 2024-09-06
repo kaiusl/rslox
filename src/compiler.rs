@@ -51,7 +51,7 @@ impl<'a> Compiler<'a> {
             }
         }
 
-        match self.consume(|token| matches!(token, Token::Eof), || &[TokenKind::Eof]) {
+        match self.consume(Token::is_eof, || &[TokenKind::Eof]) {
             Ok(_) => (),
             Err(err) => self.errors.push(err),
         };
@@ -69,10 +69,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
-        let result = match self
-            .lexer
-            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Var)))?
-        {
+        let result = match self.lexer.next_if(Token::is_var)? {
             Some(tok) => self.compile_var_decl(tok),
             None => self.compile_stmt(),
         };
@@ -89,16 +86,13 @@ impl<'a> Compiler<'a> {
     fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let const_idx = self.compile_variable_name()?;
 
-        if let Some(eq) = self.lexer.next_if(|tok| matches!(tok, Token::Eq))? {
+        if let Some(eq) = self.lexer.next_if(Token::is_eq)? {
             self.compile_expr()?;
         } else {
             self.emit(Instruction::Nil, var_kw.span.combine(&const_idx.span))
         }
 
-        self.consume(
-            |token| matches!(token, Token::Semicolon),
-            || &[TokenKind::Semicolon],
-        )?;
+        self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
 
         self.compile_define_variable(const_idx);
 
@@ -106,10 +100,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_variable_name(&mut self) -> Result<Spanned<u8>, StaticError<'a>> {
-        let ident = self.consume(
-            |tok| matches!(tok, Token::Ident { .. }),
-            || &[TokenKind::Ident],
-        )?;
+        let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
 
         self.declare_variable(
             ident.map(|ident| ident.clone().try_into_ident().unwrap().to_string()),
@@ -240,13 +231,10 @@ impl<'a> Compiler<'a> {
 
     fn compile_for_stmt(&mut self, for_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         self.enter_scope();
-        let lparen = self.consume(|tok| matches!(tok, Token::LParen), || &[TokenKind::LParen])?;
+        let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         match self.lexer.peek()? {
             Some(tok) if tok.item == Token::Semicolon => {
-                self.consume(
-                    |tok| matches!(tok, Token::Semicolon),
-                    || &[TokenKind::Semicolon],
-                )?;
+                self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
             }
             Some(tok) if tok.item == Token::Keyword(Keyword::Var) => {
                 let tok = self
@@ -262,37 +250,29 @@ impl<'a> Compiler<'a> {
 
         let mut loop_start = self.bytecode.code.len();
         let mut exit_jump = None;
-        if !self.lexer.is_next(|tok| matches!(tok, Token::Semicolon))? {
+        if !self.lexer.is_next(Token::is_semicolon)? {
             self.compile_expr()?;
-            let semicolon = self.consume(
-                |tok| matches!(tok, Token::Semicolon),
-                || &[TokenKind::Semicolon],
-            )?;
+            let semicolon = self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
 
             exit_jump =
                 Some(self.emit_jump(Instruction::JumpIfFalse(u16::MAX), semicolon.span.clone()));
             self.emit(Instruction::Pop, semicolon.span);
         } else {
-            self.consume(
-                |tok| matches!(tok, Token::Semicolon),
-                || &[TokenKind::Semicolon],
-            )?;
+            self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
         }
 
-        if !self.lexer.is_next(|tok| matches!(tok, Token::RParen))? {
+        if !self.lexer.is_next(Token::is_rparen)? {
             let body_jump = self.emit_jump(Instruction::Jump(u16::MAX), for_kw.span.clone());
             let increment_start = self.bytecode.code.len();
             self.compile_expr()?;
             self.emit(Instruction::Pop, for_kw.span.clone());
-            let rparen =
-                self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+            let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
             self.emit_loop(loop_start, for_kw.span.clone());
             loop_start = increment_start;
             self.patch_jump(body_jump);
         } else {
-            let rparen =
-                self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+            let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
         }
 
         self.compile_stmt()?;
@@ -310,9 +290,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_while_stmt(&mut self, while_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let loop_start = self.bytecode.code.len();
-        let lparen = self.consume(|tok| matches!(tok, Token::LParen), || &[TokenKind::LParen])?;
+        let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
-        let rparen = self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+        let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
         let exit_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), while_kw.span.clone());
         self.emit(Instruction::Pop, while_kw.span.clone());
@@ -335,9 +315,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_if_stmt(&mut self, if_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let lparen = self.consume(|tok| matches!(tok, Token::LParen), || &[TokenKind::LParen])?;
+        let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
-        let rparen = self.consume(|tok| matches!(tok, Token::RParen), || &[TokenKind::RParen])?;
+        let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
         let then_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), if_kw.span.clone());
         self.emit(Instruction::Pop, if_kw.span.clone());
@@ -348,10 +328,7 @@ impl<'a> Compiler<'a> {
         self.patch_jump(then_jump);
         self.emit(Instruction::Pop, if_kw.span.clone());
 
-        if let Some(else_kw) = self
-            .lexer
-            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Else)))?
-        {
+        if let Some(else_kw) = self.lexer.next_if(Token::is_else)? {
             self.compile_stmt()?;
         }
         self.patch_jump(else_jump);
@@ -396,7 +373,7 @@ impl<'a> Compiler<'a> {
             self.compile_declaration()?;
         }
 
-        self.consume(|tok| matches!(tok, Token::RBrace), || &[TokenKind::RBrace])?;
+        self.consume(Token::is_rbrace, || &[TokenKind::RBrace])?;
         Ok(())
     }
 
@@ -416,20 +393,14 @@ impl<'a> Compiler<'a> {
 
     fn compile_expr_stmt(&mut self) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
-        let semicolon = self.consume(
-            |tok| matches!(tok, Token::Semicolon),
-            || &[TokenKind::Semicolon],
-        )?;
+        let semicolon = self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
         self.emit(Instruction::Pop, semicolon.span);
         Ok(())
     }
 
     fn compile_print_stmt(&mut self, print: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
-        self.consume(
-            |tok| matches!(tok, Token::Semicolon),
-            || &[TokenKind::Semicolon],
-        )?;
+        self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
 
         self.emit(Instruction::Print, print.span);
         Ok(())
@@ -441,7 +412,7 @@ impl<'a> Compiler<'a> {
 
     pub fn consume(
         &mut self,
-        predicate: impl Fn(&Token<'_>) -> bool,
+        predicate: impl Fn(&Token<'a>) -> bool,
         expected_tokens: impl Fn() -> &'static [TokenKind],
     ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
         match self.lexer.next()? {
@@ -496,10 +467,7 @@ impl<'a> Compiler<'a> {
     ) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
 
-        self.consume(
-            |token| matches!(token, Token::RParen),
-            || &[TokenKind::RParen],
-        )?;
+        self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
         Ok(())
     }
@@ -569,7 +537,7 @@ impl<'a> Compiler<'a> {
         }
 
         if can_assign {
-            if let Some(tok) = self.lexer.next_if(|token| matches!(token, Token::Eq))? {
+            if let Some(tok) = self.lexer.next_if(Token::is_eq)? {
                 let kind = CompileErrorKind::InvalidAssignmentTarget;
                 let err = CompileError::new(kind, tok.span);
                 return Err(err.into());
@@ -639,7 +607,7 @@ impl<'a> Compiler<'a> {
         };
 
         if can_assign {
-            if let Some(tok) = self.lexer.next_if(|tok| matches!(tok, Token::Eq))? {
+            if let Some(tok) = self.lexer.next_if(Token::is_eq)? {
                 self.compile_expr()?;
                 self.emit(set, span);
 
