@@ -493,6 +493,22 @@ impl<'a> Token<'a> {
     pub fn is_else(&self) -> bool {
         matches!(self, Self::Keyword(Keyword::Else))
     }
+
+    /// Returns `true` if the token is [`LBrace`].
+    ///
+    /// [`LBrace`]: Token::LBrace
+    #[must_use]
+    pub fn is_lbrace(&self) -> bool {
+        matches!(self, Self::LBrace)
+    }
+
+    /// Returns `true` if the token is [`Comma`].
+    ///
+    /// [`Comma`]: Token::Comma
+    #[must_use]
+    pub fn is_comma(&self) -> bool {
+        matches!(self, Self::Comma)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

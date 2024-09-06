@@ -5,7 +5,11 @@ use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 fn main() {
-    let input = r#"for (var i = 0; i < 5; i = i+1) print i;"#;
+    let input = r#"fun areWeHavingItYet() {
+  print "Yes we are!";
+}
+
+print areWeHavingItYet;"#;
 
     let compiler = Compiler::from_str(input);
     let bytecode = compiler.compile().unwrap();

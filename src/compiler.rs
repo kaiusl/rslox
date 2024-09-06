@@ -1,9 +1,10 @@
+use std::rc::Rc;
 use std::u16;
 
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
-use crate::value::{InternedString, Object, Value};
+use crate::value::{InternedString, ObjFunction, Object, Value};
 
 use num_traits::FromPrimitive;
 
@@ -12,26 +13,53 @@ use error::StaticError;
 
 use self::error::{CompileError, CompileErrorKind, StaticErrors};
 
+pub enum FunType {
+    Function,
+    Script,
+}
+
 pub struct Compiler<'a> {
     pub source: &'a str,
     pub lexer: PeekableLexer<'a>,
-    pub bytecode: ByteCode,
     pub errors: StaticErrors<'a>,
 
+    pub chunk: CompileUnit,
+}
+
+pub struct CompileUnit {
+    pub bytecode: ByteCode,
     pub locals: Vec<Local>,
     pub scope_depth: usize,
+    pub fun_type: FunType,
+}
+
+impl CompileUnit {
+    pub fn new(ty: FunType) -> Self {
+        Self {
+            bytecode: ByteCode::new(),
+            locals: Vec::new(),
+            scope_depth: 0,
+            fun_type: ty,
+        }
+    }
 }
 
 impl<'a> Compiler<'a> {
     pub fn from_str(source: &'a str) -> Self {
+        //let mut locals = Vec::with_capacity(1);
+        // I don't think we need it atm, we'll add it later if we do need it
+        // locals[0] is for VM's internal use
+        // locals.push(Local {
+        //     ident: Spanned::new(String::from("this"), Span::from_len(0, 0, 0)),
+        //     depth: 0,
+        //     init: true,
+        // });
+
         Self {
             source,
             lexer: PeekableLexer::new(Lexer::new(source)),
-            bytecode: ByteCode::new(),
             errors: StaticErrors::new(source),
-
-            locals: Vec::new(),
-            scope_depth: 0,
+            chunk: CompileUnit::new(FunType::Script),
         }
     }
 
@@ -64,14 +92,19 @@ impl<'a> Compiler<'a> {
         if !self.errors.is_empty() {
             Err(self.errors)
         } else {
-            Ok(self.bytecode)
+            Ok(self.chunk.bytecode)
         }
     }
 
     fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
-        let result = match self.lexer.next_if(Token::is_var)? {
-            Some(tok) => self.compile_var_decl(tok),
+        let result = match self
+            .lexer
+            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Var | Keyword::Fun)))?
+        {
+            Some(tok) if tok.item == Token::Keyword(Keyword::Var) => self.compile_var_decl(tok),
+            Some(tok) if tok.item == Token::Keyword(Keyword::Fun) => self.compile_fun_decl(tok),
             None => self.compile_stmt(),
+            Some(_) => unreachable!(),
         };
 
         match result {
@@ -81,6 +114,62 @@ impl<'a> Compiler<'a> {
                 Err(err)
             }
         }
+    }
+
+    fn compile_fun_decl(&mut self, fun_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        let global = self.compile_variable_name()?;
+        if let Some(last) = self.chunk.locals.last_mut() {
+            last.init = true;
+        }
+        let Some(name) = self.chunk.bytecode.constants[global.item as usize].try_to_string() else {
+            todo!();
+        };
+        self.compile_function(fun_kw, name, FunType::Function)?;
+        self.compile_define_variable(global);
+
+        Ok(())
+    }
+
+    fn compile_function(
+        &mut self,
+        fun_kw: Spanned<Token<'a>>,
+        name: InternedString,
+        fun_type: FunType,
+    ) -> Result<(), StaticError<'a>> {
+        let prev_chunk = std::mem::replace(&mut self.chunk, CompileUnit::new(FunType::Function));
+
+        let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
+
+        let mut arity = 0;
+        if !self.lexer.is_next(Token::is_rparen)? {
+            loop {
+                arity += 1;
+                if arity > u8::MAX as usize {
+                    todo!("Too many arguments. Add another op to support more arguments.");
+                }
+
+                let idx = self.compile_variable_name()?;
+                self.compile_define_variable(idx);
+                if self.lexer.next_if(Token::is_comma)?.is_none() {
+                    break;
+                }
+            }
+        }
+
+        let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
+        let lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
+        self.compile_block()?;
+
+        let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
+        let fun = ObjFunction {
+            name,
+            arity: arity,
+            bytecode: function_bytecode.bytecode,
+        };
+        let fun = Value::Object(Object::Function(Rc::new(fun)));
+        self.compile_constant(fun, fun_kw.span)?;
+
+        Ok(())
     }
 
     fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
@@ -105,7 +194,7 @@ impl<'a> Compiler<'a> {
         self.declare_variable(
             ident.map(|ident| ident.clone().try_into_ident().unwrap().to_string()),
         )?;
-        if self.scope_depth > 0 {
+        if self.chunk.scope_depth > 0 {
             return Ok(ident.map_into(|_| 0));
         }
 
@@ -116,8 +205,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_define_variable(&mut self, name: Spanned<u8>) {
-        if self.scope_depth > 0 {
-            if let Some(last) = self.locals.last_mut() {
+        if self.chunk.scope_depth > 0 {
+            if let Some(last) = self.chunk.locals.last_mut() {
                 last.init = true;
             }
             return;
@@ -127,16 +216,16 @@ impl<'a> Compiler<'a> {
     }
 
     fn declare_variable(&mut self, ident: Spanned<String>) -> Result<(), StaticError<'a>> {
-        if self.scope_depth == 0 {
+        if self.chunk.scope_depth == 0 {
             return Ok(());
         }
 
-        if self.locals.len() == u8::MAX as usize {
+        if self.chunk.locals.len() == u8::MAX as usize {
             todo!("Support more than 255 locals")
         }
 
-        for local in self.locals.iter().rev() {
-            if local.depth < self.scope_depth {
+        for local in self.chunk.locals.iter().rev() {
+            if local.depth < self.chunk.scope_depth {
                 break;
             }
             if local.ident.item == ident.item {
@@ -149,10 +238,10 @@ impl<'a> Compiler<'a> {
 
         let local = Local {
             ident,
-            depth: self.scope_depth,
+            depth: self.chunk.scope_depth,
             init: false,
         };
-        self.locals.push(local);
+        self.chunk.locals.push(local);
 
         Ok(())
     }
@@ -163,7 +252,7 @@ impl<'a> Compiler<'a> {
         span: Span,
     ) -> Result<Spanned<u8>, StaticError<'a>> {
         let ident = Value::new_object(Object::String(InternedString::new(ident.to_string())));
-        let idx = self.bytecode.add_constant(ident);
+        let idx = self.chunk.bytecode.add_constant(ident);
         let Ok(idx) = u8::try_from(idx) else {
             todo!("Too many constants. Add another op to support more constants.");
         };
@@ -248,7 +337,7 @@ impl<'a> Compiler<'a> {
             None => unreachable!(),
         }
 
-        let mut loop_start = self.bytecode.code.len();
+        let mut loop_start = self.chunk.bytecode.code.len();
         let mut exit_jump = None;
         if !self.lexer.is_next(Token::is_semicolon)? {
             self.compile_expr()?;
@@ -263,7 +352,7 @@ impl<'a> Compiler<'a> {
 
         if !self.lexer.is_next(Token::is_rparen)? {
             let body_jump = self.emit_jump(Instruction::Jump(u16::MAX), for_kw.span.clone());
-            let increment_start = self.bytecode.code.len();
+            let increment_start = self.chunk.bytecode.code.len();
             self.compile_expr()?;
             self.emit(Instruction::Pop, for_kw.span.clone());
             let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
@@ -289,7 +378,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_while_stmt(&mut self, while_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let loop_start = self.bytecode.code.len();
+        let loop_start = self.chunk.bytecode.code.len();
         let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
         let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
@@ -306,7 +395,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_loop(&mut self, loop_start: usize, span: Span) {
-        let offset = self.bytecode.code.len() - loop_start + 3;
+        let offset = self.chunk.bytecode.code.len() - loop_start + 3;
         if offset >= u16::MAX as usize {
             todo!("Too long jump. Add another op to support more jumps.");
         }
@@ -337,20 +426,21 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_jump(&mut self, instruction: Instruction, span: Span) -> usize {
-        let operand_start = self.bytecode.code.len() + 1;
+        let operand_start = self.chunk.bytecode.code.len() + 1;
         self.emit(instruction, span);
 
         operand_start
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump = self.bytecode.code.len() - offset - (Instruction::JumpIfFalse(0).byte_len() - 1);
+        let jump =
+            self.chunk.bytecode.code.len() - offset - (Instruction::JumpIfFalse(0).byte_len() - 1);
 
         if jump >= u16::MAX as usize {
             todo!("Too long jump. Add another op to support more jumps.");
         }
 
-        let dst = &mut self.bytecode.code[offset..offset + 2];
+        let dst = &mut self.chunk.bytecode.code[offset..offset + 2];
         debug_assert!(dst.len() == 2);
         debug_assert!(dst[0] == 0xff);
         debug_assert!(dst[1] == 0xff);
@@ -378,17 +468,17 @@ impl<'a> Compiler<'a> {
     }
 
     fn enter_scope(&mut self) {
-        self.scope_depth += 1;
+        self.chunk.scope_depth += 1;
     }
 
     fn exit_scope(&mut self) {
-        while self.locals.last().map(|l| l.depth) == Some(self.scope_depth) {
-            self.locals.pop();
+        while self.chunk.locals.last().map(|l| l.depth) == Some(self.chunk.scope_depth) {
+            self.chunk.locals.pop();
 
             self.emit(Instruction::Pop, Span::new(0, 0, 0));
         }
 
-        self.scope_depth -= 1;
+        self.chunk.scope_depth -= 1;
     }
 
     fn compile_expr_stmt(&mut self) -> Result<(), StaticError<'a>> {
@@ -407,7 +497,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit(&mut self, instruction: Instruction, span: Span) {
-        self.bytecode.push(instruction, span);
+        self.chunk.bytecode.push(instruction, span);
     }
 
     pub fn consume(
@@ -450,7 +540,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'a>> {
-        let idx = self.bytecode.add_constant(value);
+        let idx = self.chunk.bytecode.add_constant(value);
         let Ok(idx) = u8::try_from(idx) else {
             todo!("Too many constants. Add another op to support more constants.");
         };
@@ -625,7 +715,7 @@ impl<'a> Compiler<'a> {
         ident: &str,
         span: Span,
     ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
-        for (i, local) in self.locals.iter().enumerate().rev() {
+        for (i, local) in self.chunk.locals.iter().enumerate().rev() {
             if local.ident.item == ident {
                 assert!(i < u8::MAX as usize);
                 if !local.init {

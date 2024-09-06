@@ -5,17 +5,19 @@ use std::ops;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::bytecode::ByteCode;
+
 #[derive(Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     Nil,
-    Object(Rc<RefCell<Object>>),
+    Object(Object),
 }
 
 impl Value {
     pub fn new_object(obj: Object) -> Self {
-        Self::Object(Rc::new(RefCell::new(obj)))
+        Self::Object(obj)
     }
 
     #[must_use]
@@ -38,7 +40,7 @@ impl Value {
 
     pub fn try_into_string(self) -> Result<InternedString, Self> {
         if let Self::Object(o) = &self {
-            if let Object::String(s) = &*RefCell::borrow(&*o) {
+            if let Object::String(s) = o {
                 return Ok(s.clone());
             }
         }
@@ -48,7 +50,7 @@ impl Value {
 
     pub fn try_to_string(&self) -> Option<InternedString> {
         if let Self::Object(o) = self {
-            if let Object::String(s) = &*RefCell::borrow(&*o) {
+            if let Object::String(s) = o {
                 return Some(s.clone());
             }
         }
@@ -67,7 +69,7 @@ impl fmt::Display for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
-            Value::Object(o) => write!(f, "{}", RefCell::borrow(o)),
+            Value::Object(o) => write!(f, "{}", o),
         }
     }
 }
@@ -78,7 +80,7 @@ impl fmt::Debug for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
-            Value::Object(o) => write!(f, "[{:p}] {:?}", o, RefCell::borrow(o)),
+            Value::Object(o) => write!(f, "{:?}", o),
         }
     }
 }
@@ -86,12 +88,14 @@ impl fmt::Debug for Value {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Object {
     String(InternedString),
+    Function(Rc<ObjFunction>),
 }
 
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Object::String(s) => write!(f, "{}", **s),
+            Object::Function(fun) => write!(f, "{}", fun),
         }
     }
 }
@@ -102,6 +106,12 @@ pub struct InternedString(Arc<String>);
 impl fmt::Debug for InternedString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[{:p}] {:?}", self.0, self.0)
+    }
+}
+
+impl fmt::Display for InternedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", *self.0)
     }
 }
 
@@ -121,5 +131,18 @@ impl ops::Deref for InternedString {
 impl Borrow<String> for InternedString {
     fn borrow(&self) -> &String {
         &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjFunction {
+    pub arity: usize,
+    pub name: InternedString,
+    pub bytecode: ByteCode,
+}
+
+impl fmt::Display for ObjFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<fun {}>", self.name)
     }
 }

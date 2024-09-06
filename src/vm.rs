@@ -3,11 +3,12 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::Disassembler;
-use crate::value::{InternedString, Object, Value};
+use crate::value::{InternedString, ObjFunction, Object, Value};
 
 use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
 
@@ -20,10 +21,12 @@ pub struct Vm<'a, OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub src: &'a str,
     pub constants: Vec<Value>,
     pub spans: HashMap<usize, Span>,
-    pub instructions: BytesCursor,
     pub stack: Stack<Value>,
     pub strings: HashSet<InternedString>,
     pub globals: HashMap<InternedString, Value>,
+    pub call_frames: Vec<CallFrame>,
+    pub frame: CallFrame,
+
     output: OUT,
     outerr: OUTERR,
 
@@ -38,6 +41,9 @@ impl<'a> Vm<'a> {
 }
 
 impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
+    const MAX_FRAMES: usize = 64;
+    const STACK_MAX: usize = Self::MAX_FRAMES * (u8::MAX as usize);
+
     pub fn with_output(output: OUT, outerr: OUTERR) -> Self {
         #[cfg(feature = "debug_trace")]
         let disassembler = Disassembler::new(&ByteCode::new());
@@ -46,10 +52,11 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
             src: "",
             constants: Vec::new(),
             spans: HashMap::new(),
-            instructions: BytesCursor::new(Vec::new()),
+            frame: CallFrame::new(),
             stack: Stack::new(),
             strings: HashSet::new(),
             globals: HashMap::new(),
+            call_frames: Vec::new(),
             output,
             outerr,
 
@@ -81,7 +88,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
         self.constants = bytecode.constants;
         self.spans = bytecode.spans;
-        self.instructions = BytesCursor::new(bytecode.code);
+        self.frame.instructions = BytesCursor::new(bytecode.code);
 
         Ok(())
     }
@@ -101,7 +108,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
     where
         for<'b> &'b mut OUT: io::Write,
     {
-        while let Some(op) = self.instructions.u8().map(OpCode::from_u8) {
+        while let Some(op) = self.frame.instructions.u8().map(OpCode::from_u8) {
             #[cfg(feature = "debug_trace")]
             {
                 print!("\n/ [");
@@ -121,12 +128,12 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                     }
                 }
                 OpCode::Constant => {
-                    let index = self.instructions.u8().unwrap();
-                    let value = &self.constants[index as usize];
+                    let index = self.frame.instructions.u8().unwrap();
+                    let value = &mut self.constants[index as usize];
 
                     // Push constant to strings table
                     if let Value::Object(obj) = value {
-                        match obj.borrow_mut().deref_mut() {
+                        match obj {
                             Object::String(s) => match self.strings.get(&*s) {
                                 None => {
                                     self.strings.insert(s.clone());
@@ -134,16 +141,17 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                                 // We already have self string, make constant point to it
                                 Some(existing) => *s = existing.clone(),
                             },
+                            _ => {}
                         }
                     }
                     self.stack.push(value.clone());
                 }
                 OpCode::DefineGlobal => {
-                    let index = self.instructions.u8().unwrap();
-                    let value = &self.constants[index as usize];
+                    let index = self.frame.instructions.u8().unwrap();
+                    let value = &mut self.constants[index as usize];
 
                     let name = if let Value::Object(obj) = value {
-                        match obj.borrow_mut().deref_mut() {
+                        match obj {
                             Object::String(s) => {
                                 match self.strings.get(&*s) {
                                     None => {
@@ -153,6 +161,9 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                                     Some(existing) => *s = existing.clone(),
                                 }
                                 s.clone()
+                            }
+                            _ => {
+                                panic!("tried to define global with non string identifier, it's a bug in VM or compiler")
                             }
                         }
                     } else {
@@ -167,7 +178,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                     self.stack.pop();
                 }
                 OpCode::GetGlobal => {
-                    let index = self.instructions.u8().unwrap();
+                    let index = self.frame.instructions.u8().unwrap();
                     let Some(name) = self.constants[index as usize].try_to_string() else {
                         panic!("tried to get global with non string identifier, it's a bug in VM or compiler")
                     };
@@ -180,7 +191,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                     }
                 }
                 OpCode::SetGlobal => {
-                    let index = self.instructions.u8().unwrap();
+                    let index = self.frame.instructions.u8().unwrap();
                     let Some(name) = self.constants[index as usize].try_to_string() else {
                         panic!("tried to set global with non string identifier, it's a bug in VM or compiler")
                     };
@@ -197,16 +208,16 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                     }
                 }
                 OpCode::GetLocal => {
-                    let slot = self.instructions.u8().unwrap();
+                    let slot = self.frame.instructions.u8().unwrap();
 
-                    let Some(value) = self.stack.get(slot as usize) else {
+                    let Some(value) = self.stack[self.frame.slots..].get(slot as usize) else {
                         panic!("tried to get local with no value on stack, it's a bug in VM or compiler")
                     };
                     self.stack.push(value.clone());
                 }
                 OpCode::SetLocal => {
-                    let slot = self.instructions.u8().unwrap();
-                    self.stack[slot as usize] = self.stack.last().unwrap().clone();
+                    let slot = self.frame.instructions.u8().unwrap();
+                    self.stack[self.frame.slots..][slot as usize] = self.stack.last().unwrap().clone();
                 }
                 OpCode::Negate => {
                     let value = self.stack.pop();
@@ -276,26 +287,26 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                 }
 
                 OpCode::JumpIfFalse => {
-                    let offset = self.instructions.u16().unwrap();
+                    let offset = self.frame.instructions.u16().unwrap();
                     if self.stack.last().unwrap().is_falsey() {
-                        self.instructions.jump_forward(offset as usize);
+                        self.frame.instructions.jump_forward(offset as usize);
                     }
 
-                    //dbg!(OpCode::from_u8(self.instructions.peek_u8().unwrap()));
+                    //dbg!(OpCode::from_u8(self.frame.instructions.peek_u8().unwrap()));
                 }
 
                 OpCode::Jump => {
-                    let offset = self.instructions.u16().unwrap();
-                    self.instructions.jump_forward(offset as usize);
+                    let offset = self.frame.instructions.u16().unwrap();
+                    self.frame.instructions.jump_forward(offset as usize);
 
-                    //dbg!(OpCode::from_u8(self.instructions.peek_u8().unwrap()));
+                    //dbg!(OpCode::from_u8(self.frame.instructions.peek_u8().unwrap()));
                 }
 
                 OpCode::Loop => {
-                    let offset = self.instructions.u16().unwrap();
-                    self.instructions.jump_backward(offset as usize);
+                    let offset = self.frame.instructions.u16().unwrap();
+                    self.frame.instructions.jump_backward(offset as usize);
 
-                   // dbg!(OpCode::from_u8(self.instructions.peek_u8().unwrap()));
+                    // dbg!(OpCode::from_u8(self.frame.instructions.peek_u8().unwrap()));
                 }
             }
         }
@@ -313,6 +324,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
             }
         }
     }
+    
 
     fn run_binary_add(&mut self) -> Result<(), RuntimeError<'a>> {
         let op = Self::add_number;
@@ -322,15 +334,19 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
             (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
                 self.stack.push(Value::Number(op(lhs, rhs)));
             }
-            (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => {
-                match (lhs.borrow().deref(), rhs.borrow().deref()) {
-                    (Object::String(lhs), Object::String(rhs)) => {
-                        let new = lhs.to_string() + rhs;
-                        let new = self.intern_string(new);
-                        self.stack.push(Value::new_object(Object::String(new)));
-                    }
+            (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => match (lhs, rhs) {
+                (Object::String(lhs), Object::String(rhs)) => {
+                    let new = lhs.to_string() + &rhs;
+                    let new = self.intern_string(new);
+                    self.stack.push(Value::new_object(Object::String(new)));
                 }
-            }
+                _ => {
+                    let kind = RuntimeErrorKind::InvalidOperands {
+                        expected: "two numbers or string",
+                    };
+                    return Err(self.runtime_error(kind, 1));
+                }
+            },
             (Some(lhs), Some(rhs)) => {
                 self.stack.push(lhs);
                 self.stack.push(rhs);
@@ -426,13 +442,30 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
     fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> RuntimeError<'a> {
         let span = self
             .spans
-            .get(&(self.instructions.offset() - offset))
+            .get(&(self.frame.instructions.offset() - offset))
             .cloned()
             .unwrap();
         RuntimeError {
             kind,
             span,
             src: self.src.into(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CallFrame {
+    pub instructions: BytesCursor,
+    pub ip: usize,
+    pub slots: usize,
+}
+
+impl CallFrame {
+    pub fn new() -> Self {
+        Self {
+            instructions: BytesCursor::new(vec![]),
+            ip: 0,
+            slots: 0,
         }
     }
 }
