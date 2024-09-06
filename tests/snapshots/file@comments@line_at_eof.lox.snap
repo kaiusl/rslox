@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print \"ok\"; // expect: ok\n// comment"
-input_file: test_files/comments/line_at_eof.lox
+input_file: crafting_interpreters_test_files/comments/line_at_eof.lox
 ---
 OUT: 
 ok

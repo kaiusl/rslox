@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print 8 / 2;         // expect: 4\nprint 12.34 / 12.34;  // expect: 1\n"
-input_file: test_files/operator/divide.lox
+input_file: crafting_interpreters_test_files/operator/divide.lox
 ---
 OUT: 
 4

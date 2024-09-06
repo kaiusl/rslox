@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "// [line 2] Error at 'nil': Expect variable name.\nvar nil = \"value\";\n"
-input_file: test_files/variable/use_nil_as_var.lox
+input_file: crafting_interpreters_test_files/variable/use_nil_as_var.lox
 ---
 OUT: 
 

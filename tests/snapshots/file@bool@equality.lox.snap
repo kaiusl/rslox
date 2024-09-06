@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print true == true;    // expect: true\nprint true == false;   // expect: false\nprint false == true;   // expect: false\nprint false == false;  // expect: true\n\n// Not equal to other types.\nprint true == 1;        // expect: false\nprint false == 0;       // expect: false\nprint true == \"true\";   // expect: false\nprint false == \"false\"; // expect: false\nprint false == \"\";      // expect: false\n\nprint true != true;    // expect: false\nprint true != false;   // expect: true\nprint false != true;   // expect: true\nprint false != false;  // expect: false\n\n// Not equal to other types.\nprint true != 1;        // expect: true\nprint false != 0;       // expect: true\nprint true != \"true\";   // expect: true\nprint false != \"false\"; // expect: true\nprint false != \"\";      // expect: true\n"
-input_file: test_files/bool/equality.lox
+input_file: crafting_interpreters_test_files/bool/equality.lox
 ---
 OUT: 
 true

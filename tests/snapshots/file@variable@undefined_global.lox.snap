@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print notDefined;  // expect runtime error: Undefined variable 'notDefined'.\n"
-input_file: test_files/variable/undefined_global.lox
+input_file: crafting_interpreters_test_files/variable/undefined_global.lox
 ---
 OUT: 
 

@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print 5 * 3; // expect: 15\nprint 12.34 * 0.3; // expect: 3.702\n"
-input_file: test_files/operator/multiply.lox
+input_file: crafting_interpreters_test_files/operator/multiply.lox
 ---
 OUT: 
 15

@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: // comment
-input_file: test_files/comments/only_line_comment.lox
+input_file: crafting_interpreters_test_files/comments/only_line_comment.lox
 ---
 OUT: 
 

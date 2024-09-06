@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print 4 - 3; // expect: 1\nprint 1.2 - 1.2; // expect: 0\n"
-input_file: test_files/operator/subtract.lox
+input_file: crafting_interpreters_test_files/operator/subtract.lox
 ---
 OUT: 
 1

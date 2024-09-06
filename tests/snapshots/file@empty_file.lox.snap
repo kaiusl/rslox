@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: ""
-input_file: test_files/empty_file.lox
+input_file: crafting_interpreters_test_files/empty_file.lox
 ---
 OUT: 
 

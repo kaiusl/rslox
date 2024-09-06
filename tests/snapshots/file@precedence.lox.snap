@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "// * has higher precedence than +.\nprint 2 + 3 * 4; // expect: 14\n\n// * has higher precedence than -.\nprint 20 - 3 * 4; // expect: 8\n\n// / has higher precedence than +.\nprint 2 + 6 / 3; // expect: 4\n\n// / has higher precedence than -.\nprint 2 - 6 / 3; // expect: 0\n\n// < has higher precedence than ==.\nprint false == 2 < 1; // expect: true\n\n// > has higher precedence than ==.\nprint false == 1 > 2; // expect: true\n\n// <= has higher precedence than ==.\nprint false == 2 <= 1; // expect: true\n\n// >= has higher precedence than ==.\nprint false == 1 >= 2; // expect: true\n\n// 1 - 1 is not space-sensitive.\nprint 1 - 1; // expect: 0\nprint 1 -1;  // expect: 0\nprint 1- 1;  // expect: 0\nprint 1-1;   // expect: 0\n\n// Using () for grouping.\nprint (2 * (6 - (2 + 2))); // expect: 4\n"
-input_file: test_files/precedence.lox
+input_file: crafting_interpreters_test_files/precedence.lox
 ---
 OUT: 
 14

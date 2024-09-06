@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "-\"s\"; // expect runtime error: Operand must be a number.\n"
-input_file: test_files/operator/negate_nonnum.lox
+input_file: crafting_interpreters_test_files/operator/negate_nonnum.lox
 ---
 OUT: 
 

@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "true + nil; // expect runtime error: Operands must be two numbers or two strings.\n"
-input_file: test_files/operator/add_bool_nil.lox
+input_file: crafting_interpreters_test_files/operator/add_bool_nil.lox
 ---
 OUT: 
 

@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "// [line 2] Error at 'this': Expect variable name.\nvar this = \"value\";\n"
-input_file: test_files/variable/use_this_as_var.lox
+input_file: crafting_interpreters_test_files/variable/use_this_as_var.lox
 ---
 OUT: 
 

@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "print nil != nil; // expect: false\n\nprint true != true; // expect: false\nprint true != false; // expect: true\n\nprint 1 != 1; // expect: false\nprint 1 != 2; // expect: true\n\nprint \"str\" != \"str\"; // expect: false\nprint \"str\" != \"ing\"; // expect: true\n\nprint nil != false; // expect: true\nprint false != 0; // expect: true\nprint 0 != \"0\"; // expect: true\n"
-input_file: test_files/operator/not_equals.lox
+input_file: crafting_interpreters_test_files/operator/not_equals.lox
 ---
 OUT: 
 false
