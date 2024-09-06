@@ -5,15 +5,13 @@ use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 fn main() {
-    let input = r#"fun areWeHavingItYet() {
-  print "Yes we are!";
-}
-
-print areWeHavingItYet;"#;
+    let input = r#"fun foo(a) {
+  var a; // Error at 'a': Already a variable with this name in this scope.
+}"#;
 
     let compiler = Compiler::from_str(input);
-    let bytecode = compiler.compile().unwrap();
-    let disassembler = Disassembler::new(&bytecode);
+    let (bytecode, constants) = compiler.compile().unwrap();
+    let disassembler = Disassembler::new(bytecode, constants);
     disassembler.print();
 
     #[cfg(feature = "debug_trace")]

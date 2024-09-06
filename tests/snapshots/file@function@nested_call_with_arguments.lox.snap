@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "fun returnArg(arg) {\n  return arg;\n}\n\nfun returnFunCallWithArg(func, arg) {\n  return returnArg(func)(arg);\n}\n\nfun printArg(arg) {\n  print arg;\n}\n\nreturnFunCallWithArg(printArg, \"hello world\"); // expect: hello world\n"
+input_file: crafting_interpreters_test_files/function/nested_call_with_arguments.lox
+---
+OUT: 
+hello world
+
+===
+ERR:

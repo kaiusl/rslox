@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 3] Error at 'c': Expect ')' after parameters.\n// [c line 4] Error at end: Expect '}' after block.\nfun foo(a, b c, d, e, f) {}\n"
+input_file: crafting_interpreters_test_files/function/missing_comma_in_parameters.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected RParen, found 'ident'
+   ╭─[3:14]
+ 2 │ // [c line 4] Error at end: Expect '}' after block.
+ 3 │ fun foo(a, b c, d, e, f) {}
+   ·              ┬
+   ·              ╰── here
+   ╰────

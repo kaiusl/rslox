@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
-use crate::disassembler::Disassembler;
+use crate::disassembler::{self, Disassembler};
 use crate::value::{InternedString, ObjFunction, Object, Value};
 
 use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
@@ -46,7 +46,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
     pub fn with_output(output: OUT, outerr: OUTERR) -> Self {
         #[cfg(feature = "debug_trace")]
-        let disassembler = Disassembler::new(&ByteCode::new());
+        let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
 
         Vm {
             src: "",
@@ -72,7 +72,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         self.src = input;
 
         let compiler = crate::compiler::Compiler::from_str(input);
-        let bytecode = match compiler.compile() {
+        let (bytecode, constants) = match compiler.compile() {
             Ok(bytecode) => bytecode,
             Err(err) => {
                 let report = miette::Report::new(err.to_owned());
@@ -83,12 +83,14 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
         #[cfg(feature = "debug_trace")]
         {
-            self.disassembler = Disassembler::new(&bytecode);
+            self.disassembler = Disassembler::new(bytecode.clone(), constants.clone());
         }
 
-        self.constants = bytecode.constants;
+        self.constants = constants;
         self.spans = bytecode.spans;
         self.frame.instructions = BytesCursor::new(bytecode.code);
+        self.stack.push(Value::Nil);
+        self.frame.slots = 0;
 
         Ok(())
     }
@@ -122,9 +124,15 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
             match op {
                 OpCode::Return => {
-                    let value = self.stack.pop();
-                    if let Some(value) = value {
-                        writeln!(&mut self.output, "RET: {}", value).unwrap();
+                    let result = self.stack.pop().unwrap();
+
+                    self.stack.truncate(self.frame.slots);
+
+                    self.stack.push(result);
+                    if let Some(frame) = self.call_frames.pop() {
+                        self.frame = frame;
+                    } else {
+                        unreachable!()
                     }
                 }
                 OpCode::Constant => {
@@ -217,7 +225,8 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                 }
                 OpCode::SetLocal => {
                     let slot = self.frame.instructions.u8().unwrap();
-                    self.stack[self.frame.slots..][slot as usize] = self.stack.last().unwrap().clone();
+                    self.stack[self.frame.slots..][slot as usize] =
+                        self.stack.last().unwrap().clone();
                 }
                 OpCode::Negate => {
                     let value = self.stack.pop();
@@ -308,8 +317,45 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
                     // dbg!(OpCode::from_u8(self.frame.instructions.peek_u8().unwrap()));
                 }
+                OpCode::Call => {
+                    let arg_count = self.frame.instructions.u8().unwrap();
+                    let callee = self.stack[self.stack.len() - arg_count as usize - 1].clone();
+                    self.call_value(callee, arg_count)?;
+                }
             }
         }
+
+        Ok(())
+    }
+
+    fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError<'a>> {
+        match callee {
+            Value::Object(Object::Function(fun)) => self.call(&fun, arg_count),
+            _ => {
+                todo!("runtime error: can only call functions and classes")
+            }
+        }
+    }
+
+    fn call(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError<'a>> {
+        if arg_count as usize != fun.arity {
+            todo!(
+                "runtime error: wrong number of arguments: expected {}, got {}",
+                fun.arity,
+                arg_count
+            );
+        }
+
+        println!("Calling function {}", fun.name);
+        let disassembler = Disassembler::new(fun.bytecode.clone(), self.constants.clone());
+        disassembler.print();
+
+        let frame = CallFrame {
+            instructions: BytesCursor::new(fun.bytecode.code.clone()),
+            slots: self.stack.len() - arg_count as usize - 1,
+        };
+        let prev_frame = std::mem::replace(&mut self.frame, frame);
+        self.call_frames.push(prev_frame);
 
         Ok(())
     }
@@ -324,7 +370,6 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
             }
         }
     }
-    
 
     fn run_binary_add(&mut self) -> Result<(), RuntimeError<'a>> {
         let op = Self::add_number;
@@ -456,7 +501,6 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 #[derive(Debug)]
 pub struct CallFrame {
     pub instructions: BytesCursor,
-    pub ip: usize,
     pub slots: usize,
 }
 
@@ -464,7 +508,6 @@ impl CallFrame {
     pub fn new() -> Self {
         Self {
             instructions: BytesCursor::new(vec![]),
-            ip: 0,
             slots: 0,
         }
     }

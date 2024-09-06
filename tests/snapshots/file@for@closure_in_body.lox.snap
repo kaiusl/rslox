@@ -7,45 +7,10 @@ OUT:
 
 ===
 ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-   ╭─[7:3]
- 6 │   var j = i;
- 7 │   fun f() {
-   ·   ─┬─
+  × undefined variable `i`
+   ╭─[1:1]
+ 1 │ var f1;
+   · ───┬──
    ·    ╰── here
- 8 │     print i;
+ 2 │ var f2;
    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[10:3]
-  9 │     print j;
- 10 │   }
-    ·   ┬
-    ·   ╰── here
- 11 │ 
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[15:1]
- 14 │   else f3 = f;
- 15 │ }
-    · ┬
-    · ╰── here
- 16 │ 
-    ╰────
-Error:   × expected Semicolon, found '('
-    ╭─[19:3]
- 18 │       // expect: 1
- 19 │ f2(); // expect: 4
-    ·   ┬
-    ·   ╰── here
- 20 │       // expect: 2
-    ╰────
-Error:   × expected Semicolon, found '('
-    ╭─[21:3]
- 20 │       // expect: 2
- 21 │ f3(); // expect: 4
-    ·   ┬
-    ·   ╰── here
- 22 │       // expect: 3
-    ╰────

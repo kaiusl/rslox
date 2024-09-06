@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::u16;
 
@@ -13,6 +14,7 @@ use error::StaticError;
 
 use self::error::{CompileError, CompileErrorKind, StaticErrors};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunType {
     Function,
     Script,
@@ -24,6 +26,7 @@ pub struct Compiler<'a> {
     pub errors: StaticErrors<'a>,
 
     pub chunk: CompileUnit,
+    pub constants: Vec<Value>,
 }
 
 pub struct CompileUnit {
@@ -35,9 +38,16 @@ pub struct CompileUnit {
 
 impl CompileUnit {
     pub fn new(ty: FunType) -> Self {
+        //locals[0] is for VM's internal use
+        let mut locals = Vec::with_capacity(1);
+        locals.push(Local {
+            ident: Spanned::new(String::from("this"), Span::from_len(0, 0, 0)),
+            depth: 0,
+            init: true,
+        });
         Self {
             bytecode: ByteCode::new(),
-            locals: Vec::new(),
+            locals,
             scope_depth: 0,
             fun_type: ty,
         }
@@ -60,10 +70,16 @@ impl<'a> Compiler<'a> {
             lexer: PeekableLexer::new(Lexer::new(source)),
             errors: StaticErrors::new(source),
             chunk: CompileUnit::new(FunType::Script),
+            constants: Vec::new(),
         }
     }
 
-    pub fn compile(mut self) -> Result<ByteCode, StaticErrors<'a>> {
+    pub fn add_constant(&mut self, value: Value) -> usize {
+        self.constants.push(value);
+        self.constants.len() - 1
+    }
+
+    pub fn compile(mut self) -> Result<(ByteCode, Vec<Value>), StaticErrors<'a>> {
         loop {
             match self.lexer.peek() {
                 Ok(Some(tok)) if **tok == Token::Eof => break,
@@ -84,15 +100,15 @@ impl<'a> Compiler<'a> {
             Err(err) => self.errors.push(err),
         };
 
-        self.emit(
-            Instruction::Return,
-            Span::from_len(0, self.source.len().saturating_sub(1), 0),
-        );
+        // self.emit(
+        //     Instruction::Return,
+        //     Span::from_len(0, self.source.len().saturating_sub(1), 0),
+        // );
 
         if !self.errors.is_empty() {
             Err(self.errors)
         } else {
-            Ok(self.chunk.bytecode)
+            Ok((self.chunk.bytecode, self.constants))
         }
     }
 
@@ -121,7 +137,7 @@ impl<'a> Compiler<'a> {
         if let Some(last) = self.chunk.locals.last_mut() {
             last.init = true;
         }
-        let Some(name) = self.chunk.bytecode.constants[global.item as usize].try_to_string() else {
+        let Some(name) = self.constants[global.item as usize].try_to_string() else {
             todo!();
         };
         self.compile_function(fun_kw, name, FunType::Function)?;
@@ -136,9 +152,11 @@ impl<'a> Compiler<'a> {
         name: InternedString,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
-        let prev_chunk = std::mem::replace(&mut self.chunk, CompileUnit::new(FunType::Function));
+        let prev_chunk = std::mem::replace(&mut self.chunk, CompileUnit::new(fun_type));
 
         let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
+
+        self.enter_scope();
 
         let mut arity = 0;
         if !self.lexer.is_next(Token::is_rparen)? {
@@ -149,7 +167,9 @@ impl<'a> Compiler<'a> {
                 }
 
                 let idx = self.compile_variable_name()?;
+                println!("{}: {}", idx, self.constants[idx.item as usize]);
                 self.compile_define_variable(idx);
+
                 if self.lexer.next_if(Token::is_comma)?.is_none() {
                     break;
                 }
@@ -160,10 +180,16 @@ impl<'a> Compiler<'a> {
         let lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
         self.compile_block()?;
 
+        // emit return nil in case the block does not have explicit return,
+        // if it has there instructions simply will not be executed
+        self.emit(Instruction::Nil, lbrace.span.clone());
+        self.emit(Instruction::Return, lbrace.span.clone());
+
+        self.exit_scope();
         let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
         let fun = ObjFunction {
             name,
-            arity: arity,
+            arity,
             bytecode: function_bytecode.bytecode,
         };
         let fun = Value::Object(Object::Function(Rc::new(fun)));
@@ -252,7 +278,7 @@ impl<'a> Compiler<'a> {
         span: Span,
     ) -> Result<Spanned<u8>, StaticError<'a>> {
         let ident = Value::new_object(Object::String(InternedString::new(ident.to_string())));
-        let idx = self.chunk.bytecode.add_constant(ident);
+        let idx = self.add_constant(ident);
         let Ok(idx) = u8::try_from(idx) else {
             todo!("Too many constants. Add another op to support more constants.");
         };
@@ -300,8 +326,9 @@ impl<'a> Compiler<'a> {
         let Some(tok) = self.lexer.next_if(|tok| {
             matches!(
                 tok,
-                Token::Keyword(Keyword::Print | Keyword::If | Keyword::While | Keyword::For)
-                    | Token::LBrace
+                Token::Keyword(
+                    Keyword::Print | Keyword::If | Keyword::While | Keyword::For | Keyword::Return
+                ) | Token::LBrace
             )
         })?
         else {
@@ -313,9 +340,30 @@ impl<'a> Compiler<'a> {
             Token::Keyword(Keyword::If) => self.compile_if_stmt(tok),
             Token::Keyword(Keyword::While) => self.compile_while_stmt(tok),
             Token::Keyword(Keyword::For) => self.compile_for_stmt(tok),
+            Token::Keyword(Keyword::Return) => self.compile_return_stmt(tok),
             Token::LBrace => self.compile_block_stmt(tok),
             _ => unreachable!(),
         }
+    }
+
+    fn compile_return_stmt(
+        &mut self,
+        return_kw: Spanned<Token<'a>>,
+    ) -> Result<(), StaticError<'a>> {
+        if self.chunk.fun_type == FunType::Script {
+            todo!("return in script");
+        }
+
+        if let Some(semicolon) = self.lexer.next_if(Token::is_semicolon)? {
+            self.emit(Instruction::Nil, semicolon.span.clone());
+            self.emit(Instruction::Return, semicolon.span);
+        } else {
+            self.compile_expr()?;
+            let _semicolon = self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
+            self.emit(Instruction::Return, return_kw.span);
+        }
+
+        Ok(())
     }
 
     fn compile_for_stmt(&mut self, for_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
@@ -540,7 +588,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'a>> {
-        let idx = self.chunk.bytecode.add_constant(value);
+        let idx = self.add_constant(value);
         let Ok(idx) = u8::try_from(idx) else {
             todo!("Too many constants. Add another op to support more constants.");
         };
@@ -793,8 +841,38 @@ impl<'a> Compiler<'a> {
             | Token::LtEq => self.compile_binary(infix, can_assign),
             Token::Keyword(Keyword::And) => self.compile_and(infix, can_assign),
             Token::Keyword(Keyword::Or) => self.compile_or(infix, can_assign),
+            Token::LParen => self.compile_call(infix, can_assign),
             _ => unreachable!("Invalid infix operator."),
         }
+    }
+
+    fn compile_call(
+        &mut self,
+        lparen: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
+        let arg_count = self.compile_arg_list()?;
+        self.emit(Instruction::Call(arg_count), lparen.span);
+        Ok(())
+    }
+
+    fn compile_arg_list(&mut self) -> Result<u8, StaticError<'a>> {
+        let mut arg_count = 0;
+        if !self.lexer.is_next(Token::is_rparen)? {
+            loop {
+                self.compile_expr()?;
+                if arg_count == u8::MAX {
+                    todo!("Too many arguments. Add another op to support more arguments.");
+                }
+                arg_count += 1;
+                if self.lexer.next_if(Token::is_comma)?.is_none() {
+                    break;
+                }
+            }
+        }
+
+        let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
+        Ok(arg_count)
     }
 
     fn compile_and(
@@ -854,6 +932,7 @@ impl Precedence {
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Precedence::Comparison,
             Token::Keyword(Keyword::And) => Precedence::And,
             Token::Keyword(Keyword::Or) => Precedence::Or,
+            Token::LParen => Precedence::Call,
 
             _ => Self::None,
         }

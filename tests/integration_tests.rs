@@ -41,6 +41,25 @@ test_dir!(
 
 
 test_dir!(
+    function;
+    recursion,
+    nested_call_with_arguments,
+    print,
+    parameters,
+    too_many_parameters,
+    missing_comma_in_parameters,
+    mutual_recursion,
+    local_mutual_recursion,
+    empty_body,
+    local_recursion,
+    too_many_arguments,
+    missing_arguments,
+    body_must_be_block,
+    extra_arguments,
+);
+
+
+test_dir!(
     block;
     scope,
     empty,

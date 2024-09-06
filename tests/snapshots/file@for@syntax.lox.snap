@@ -4,56 +4,20 @@ description: "// Single-expression body.\nfor (var c = 0; c < 3;) print c = c + 
 input_file: crafting_interpreters_test_files/for/syntax.lox
 ---
 OUT: 
+1
+2
+3
+0
+1
+2
+done
+0
+1
+0
+1
+2
+0
+1
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-    ╭─[16:1]
- 15 │ // No clauses.
- 16 │ fun foo() {
-    · ─┬─
-    ·  ╰── here
- 17 │   for (;;) return "done";
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
-    ╭─[17:12]
- 16 │ fun foo() {
- 17 │   for (;;) return "done";
-    ·            ───┬──
-    ·               ╰── here
- 18 │ }
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[18:1]
- 17 │   for (;;) return "done";
- 18 │ }
-    · ┬
-    · ╰── here
- 19 │ print foo(); // expect: done
-    ╰────
-Error:   × expected Semicolon, found '('
-    ╭─[19:10]
- 18 │ }
- 19 │ print foo(); // expect: done
-    ·          ┬
-    ·          ╰── here
- 20 │ 
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-    ╭─[28:1]
- 27 │ // No condition.
- 28 │ fun bar() {
-    · ─┬─
-    ·  ╰── here
- 29 │   for (var i = 0;; i = i + 1) {
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
-    ╭─[31:17]
- 30 │     print i;
- 31 │     if (i >= 2) return;
-    ·                 ───┬──
-    ·                    ╰── here
- 32 │   }
-    ╰────
+ERR:

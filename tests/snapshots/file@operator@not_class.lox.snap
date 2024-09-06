@@ -16,10 +16,3 @@ Error:   × expected one of the following: 'number, (, -, !, string, ident, nil,
    ·   ╰── here
  2 │ print !Bar;      // expect: false
    ╰────
-Error:   × expected Semicolon, found '('
-   ╭─[3:11]
- 2 │ print !Bar;      // expect: false
- 3 │ print !Bar();    // expect: false
-   ·           ┬
-   ·           ╰── here
-   ╰────

@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "// [line 3] Error at '123': Expect '{' before function body.\n// [c line 4] Error at end: Expect '}' after block.\nfun f() 123;\n"
+input_file: crafting_interpreters_test_files/function/body_must_be_block.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected LBrace, found 'number'
+   ╭─[3:9]
+ 2 │ // [c line 4] Error at end: Expect '}' after block.
+ 3 │ fun f() 123;
+   ·         ─┬─
+   ·          ╰── here
+   ╰────

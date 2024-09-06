@@ -9,7 +9,6 @@ use crate::value::Value;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteCode {
     pub code: Vec<u8>,
-    pub constants: Vec<Value>,
     pub spans: HashMap<usize, Span>,
 }
 
@@ -17,7 +16,6 @@ impl ByteCode {
     pub fn new() -> Self {
         Self {
             code: Vec::new(),
-            constants: Vec::new(),
             spans: HashMap::new(),
         }
     }
@@ -25,15 +23,6 @@ impl ByteCode {
     pub fn push(&mut self, instruction: Instruction, span: Span) {
         self.spans.insert(self.code.len(), span);
         instruction.write_bytes(&mut self.code);
-    }
-
-    pub fn add_constant(&mut self, value: Value) -> usize {
-        self.constants.push(value);
-        self.constants.len() - 1
-    }
-
-    pub fn disassemble(&self) -> Disassembler {
-        Disassembler::new(self)
     }
 }
 
@@ -49,6 +38,10 @@ impl BytesCursor {
             offset: 0,
             instructions,
         }
+    }
+
+    pub fn as_instructions(&self) -> &[u8] {
+        self.instructions.as_slice()
     }
 
     pub fn jump_forward(&mut self, count: usize) {
@@ -131,6 +124,7 @@ pub enum OpCode {
     JumpIfFalse,
     Jump,
     Loop,
+    Call,
 }
 
 impl OpCode {
@@ -169,6 +163,7 @@ pub enum Instruction {
     JumpIfFalse(u16),
     Jump(u16),
     Loop(u16),
+    Call(u8),
 }
 
 impl Instruction {
@@ -198,6 +193,7 @@ impl Instruction {
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::Loop(_) => OpCode::Loop,
+            Instruction::Call(_) => OpCode::Call,
         }
     }
 
@@ -226,7 +222,8 @@ impl Instruction {
             | Instruction::GetGlobal(idx)
             | Instruction::SetGlobal(idx)
             | Instruction::GetLocal(idx)
-            | Instruction::SetLocal(idx) => {
+            | Instruction::SetLocal(idx)
+            | Instruction::Call(idx) => {
                 dst.push(*idx);
             }
 
@@ -327,6 +324,14 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::Call) => match bytes.u8() {
+                Some(num_args) => Instruction::Call(num_args),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected function index"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -360,7 +365,8 @@ impl Instruction {
             | Instruction::GetGlobal(idx)
             | Instruction::SetGlobal(idx)
             | Instruction::GetLocal(idx)
-            | Instruction::SetLocal(idx) => mem::size_of_val(idx),
+            | Instruction::SetLocal(idx)
+            | Instruction::Call(idx) => mem::size_of_val(idx),
 
             Instruction::JumpIfFalse(offset)
             | Instruction::Jump(offset)
@@ -396,6 +402,7 @@ impl fmt::Display for Instruction {
             Instruction::JumpIfFalse(offset) => write!(f, "JUMP_IF_FALSE {}", offset),
             Instruction::Jump(offset) => write!(f, "JUMP {}", offset),
             Instruction::Loop(offset) => write!(f, "LOOP {}", offset),
+            Instruction::Call(idx) => write!(f, "CALL {}", idx),
         }
     }
 }

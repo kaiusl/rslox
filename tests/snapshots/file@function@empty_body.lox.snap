@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {}\nprint f(); // expect: nil\n"
+input_file: crafting_interpreters_test_files/function/empty_body.lox
+---
+OUT: 
+nil
+
+===
+ERR:

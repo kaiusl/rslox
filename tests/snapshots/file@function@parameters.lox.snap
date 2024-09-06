@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "fun f0() { return 0; }\nprint f0(); // expect: 0\n\nfun f1(a) { return a; }\nprint f1(1); // expect: 1\n\nfun f2(a, b) { return a + b; }\nprint f2(1, 2); // expect: 3\n\nfun f3(a, b, c) { return a + b + c; }\nprint f3(1, 2, 3); // expect: 6\n\nfun f4(a, b, c, d) { return a + b + c + d; }\nprint f4(1, 2, 3, 4); // expect: 10\n\nfun f5(a, b, c, d, e) { return a + b + c + d + e; }\nprint f5(1, 2, 3, 4, 5); // expect: 15\n\nfun f6(a, b, c, d, e, f) { return a + b + c + d + e + f; }\nprint f6(1, 2, 3, 4, 5, 6); // expect: 21\n\nfun f7(a, b, c, d, e, f, g) { return a + b + c + d + e + f + g; }\nprint f7(1, 2, 3, 4, 5, 6, 7); // expect: 28\n\nfun f8(a, b, c, d, e, f, g, h) { return a + b + c + d + e + f + g + h; }\nprint f8(1, 2, 3, 4, 5, 6, 7, 8); // expect: 36\n"
+input_file: crafting_interpreters_test_files/function/parameters.lox
+---
+OUT: 
+0
+1
+3
+6
+10
+15
+21
+28
+36
+
+===
+ERR:

@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "fun isEven(n) {\n  if (n == 0) return true;\n  return isOdd(n - 1);\n}\n\nfun isOdd(n) {\n  if (n == 0) return false;\n  return isEven(n - 1);\n}\n\nprint isEven(4); // expect: true\nprint isOdd(3); // expect: true\n"
+input_file: crafting_interpreters_test_files/function/mutual_recursion.lox
+---
+OUT: 
+true
+true
+
+===
+ERR:

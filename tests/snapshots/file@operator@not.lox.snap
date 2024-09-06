@@ -4,16 +4,14 @@ description: "print !true;     // expect: false\nprint !false;    // expect: tru
 input_file: crafting_interpreters_test_files/operator/not.lox
 ---
 OUT: 
+false
+true
+true
+false
+false
+true
+false
+false
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-    ╭─[12:1]
- 11 │ 
- 12 │ fun foo() {}
-    · ─┬─
-    ·  ╰── here
- 13 │ print !foo;      // expect: false
-    ╰────
+ERR:

@@ -9,12 +9,13 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-   ╭─[1:1]
+Error:   × variable with name 'arg' is already defined in this scope
+   ╭─[2:9]
  1 │ fun foo(arg,
-   · ─┬─
-   ·  ╰── here
  2 │         arg) { // Error at 'arg': Already a variable with this name in this scope.
+   ·         ─┬─
+   ·          ╰── here
+ 3 │   "body";
    ╰────
 Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
    ╭─[4:1]

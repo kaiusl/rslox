@@ -1,7 +1,7 @@
 ---
 source: tests/common/mod.rs
 description: "// [line 3] Error: Unexpected character.\n// [java line 3] Error at 'b': Expect ')' after arguments.\nfoo(a | b);\n"
-input_file: test_files/unexpected_character.lox
+input_file: crafting_interpreters_test_files/unexpected_character.lox
 ---
 OUT: 
 
@@ -9,10 +9,10 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected Semicolon, found '('
-   ╭─[3:4]
+Error:   × [line 3] Error: Unexpected character: |
+   ╭─[3:7]
  2 │ // [java line 3] Error at 'b': Expect ')' after arguments.
  3 │ foo(a | b);
-   ·    ┬
-   ·    ╰── here
+   ·       ┬
+   ·       ╰── here
    ╰────

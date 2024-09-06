@@ -19,4 +19,4 @@ rust_2018_idioms = "deny"
 
 [features]
 debug_trace = []
-default = []
+default = ["debug_trace"]

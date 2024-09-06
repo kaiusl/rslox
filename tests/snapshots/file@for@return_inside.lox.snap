@@ -4,31 +4,7 @@ description: "fun f() {\n  for (;;) {\n    var i = \"i\";\n    return i;\n  }\n}
 input_file: crafting_interpreters_test_files/for/return_inside.lox
 ---
 OUT: 
+i
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-   ╭─[1:1]
- 1 │ fun f() {
-   · ─┬─
-   ·  ╰── here
- 2 │   for (;;) {
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'return'
-   ╭─[4:5]
- 3 │     var i = "i";
- 4 │     return i;
-   ·     ───┬──
-   ·        ╰── here
- 5 │   }
-   ╰────
-Error:   × expected Semicolon, found '('
-   ╭─[8:8]
- 7 │ 
- 8 │ print f();
-   ·        ┬
-   ·        ╰── here
- 9 │ // expect: i
-   ╰────
+ERR:

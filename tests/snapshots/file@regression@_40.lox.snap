@@ -7,52 +7,10 @@ OUT:
 
 ===
 ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-   ╭─[1:1]
+  × undefined variable `capturedVar`
+   ╭─[1:5]
  1 │ fun caller(g) {
-   · ─┬─
-   ·  ╰── here
+   ·     ───┬──
+   ·        ╰── here
  2 │   g();
    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[5:1]
- 4 │   print g == nil; // expect: false
- 5 │ }
-   · ┬
-   · ╰── here
- 6 │ 
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-   ╭─[7:1]
- 6 │ 
- 7 │ fun callCaller() {
-   · ─┬─
-   ·  ╰── here
- 8 │   var capturedVar = "before";
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
-    ╭─[11:3]
- 10 │ 
- 11 │   fun f() {
-    ·   ─┬─
-    ·    ╰── here
- 12 │     // Commenting the next line out prevents the bug!
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[17:3]
- 16 │     //return nil;
- 17 │   }
-    ·   ┬
-    ·   ╰── here
- 18 │ 
-    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[20:1]
- 19 │   caller(f);
- 20 │ }
-    · ┬
-    · ╰── here
- 21 │ 
-    ╰────
