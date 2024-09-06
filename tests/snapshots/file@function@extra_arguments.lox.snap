@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "fun f(a, b) {\n  print a;\n  print b;\n}\n\nf(1, 2, 3, 4); // expect runtime error: Expected 2 arguments but got 4.\n"
+input_file: crafting_interpreters_test_files/function/extra_arguments.lox
+---
+OUT: 
+
+===
+ERR: 
+  × wrong number of arguments, expected 2, got 4
+   ╭─[6:2]
+ 5 │ 
+ 6 │ f(1, 2, 3, 4); // expect runtime error: Expected 2 arguments but got 4.
+   ·  ┬
+   ·  ╰── here
+   ╰────

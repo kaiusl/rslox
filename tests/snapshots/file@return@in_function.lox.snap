@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {\n  return \"ok\";\n  print \"bad\";\n}\n\nprint f(); // expect: ok\n"
+input_file: crafting_interpreters_test_files/return/in_function.lox
+---
+OUT: 
+ok
+
+===
+ERR:

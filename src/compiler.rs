@@ -162,8 +162,12 @@ impl<'a> Compiler<'a> {
         if !self.lexer.is_next(Token::is_rparen)? {
             loop {
                 arity += 1;
-                if arity > u8::MAX as usize {
-                    todo!("Too many arguments. Add another op to support more arguments.");
+                if arity == u8::MAX as usize {
+                    // == because local slot 1 is for the function itself
+                    let kind = CompileErrorKind::Msg("can't have more then 255 parameters".into());
+                    let span = self.lexer.next()?.unwrap().span;
+                    let err = CompileError::new(kind, span);
+                    return Err(err.into());
                 }
 
                 let idx = self.compile_variable_name()?;
@@ -247,7 +251,9 @@ impl<'a> Compiler<'a> {
         }
 
         if self.chunk.locals.len() == u8::MAX as usize {
-            todo!("Support more than 255 locals")
+            let kind = CompileErrorKind::Msg("too many local variables".into());
+            let err = CompileError::new(kind, ident.span);
+            return Err(err.into());
         }
 
         for local in self.chunk.locals.iter().rev() {
@@ -351,7 +357,9 @@ impl<'a> Compiler<'a> {
         return_kw: Spanned<Token<'a>>,
     ) -> Result<(), StaticError<'a>> {
         if self.chunk.fun_type == FunType::Script {
-            todo!("return in script");
+            let kind = CompileErrorKind::Msg("can't return from top-level code".into());
+            let err = CompileError::new(kind, return_kw.span);
+            return Err(err.into());
         }
 
         if let Some(semicolon) = self.lexer.next_if(Token::is_semicolon)? {
@@ -860,10 +868,13 @@ impl<'a> Compiler<'a> {
         let mut arg_count = 0;
         if !self.lexer.is_next(Token::is_rparen)? {
             loop {
-                self.compile_expr()?;
                 if arg_count == u8::MAX {
-                    todo!("Too many arguments. Add another op to support more arguments.");
+                    let kind = CompileErrorKind::Msg("can't have more than 255 arguments".into());
+                    let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+                    let err = CompileError::new(kind, ident.span);
+                    return Err(err.into());
                 }
+                self.compile_expr()?;
                 arg_count += 1;
                 if self.lexer.next_if(Token::is_comma)?.is_none() {
                     break;

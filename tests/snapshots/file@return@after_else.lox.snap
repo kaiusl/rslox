@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {\n  if (false) \"no\"; else return \"ok\";\n}\n\nprint f(); // expect: ok\n"
+input_file: crafting_interpreters_test_files/return/after_else.lox
+---
+OUT: 
+ok
+
+===
+ERR:

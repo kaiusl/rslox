@@ -110,6 +110,7 @@ pub enum CompileErrorKind {
         ident: String,
     },
     UseOfLocalInItsOwnInitializer,
+    Msg(Cow<'static, str>)
 }
 
 impl fmt::Display for CompileErrorKind {
@@ -148,6 +149,8 @@ impl fmt::Display for CompileErrorKind {
             CompileErrorKind::UseOfLocalInItsOwnInitializer => {
                 write!(f, "cannot read local variable in its own initializer")
             }
+
+            CompileErrorKind::Msg(msg) => write!(f, "{}", msg),
         }
     }
 }

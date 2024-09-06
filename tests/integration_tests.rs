@@ -60,6 +60,18 @@ test_dir!(
 
 
 test_dir!(
+    return;
+    after_while,
+    in_method,
+    return_nil_if_no_value,
+    after_else,
+    at_top_level,
+    in_function,
+    after_if,
+);
+
+
+test_dir!(
     block;
     scope,
     empty,
@@ -191,6 +203,16 @@ test_dir!(
 test_dir!(
     print;
     missing_argument,
+);
+
+
+test_dir!(
+    call;
+    object,
+    string,
+    num,
+    bool,
+    nil,
 );
 
 

@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "\"str\"(); // expect runtime error: Can only call functions and classes.\n"
+input_file: crafting_interpreters_test_files/call/string.lox
+---
+OUT: 
+
+===
+ERR: 
+  × can only call functions and classes
+   ╭────
+ 1 │ "str"(); // expect runtime error: Can only call functions and classes.
+   ·      ┬
+   ·      ╰── here
+   ╰────

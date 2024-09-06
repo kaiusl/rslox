@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "return \"wat\"; // Error at 'return': Can't return from top-level code.\n"
+input_file: crafting_interpreters_test_files/return/at_top_level.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × can't return from top-level code
+   ╭────
+ 1 │ return "wat"; // Error at 'return': Can't return from top-level code.
+   · ───┬──
+   ·    ╰── here
+   ╰────

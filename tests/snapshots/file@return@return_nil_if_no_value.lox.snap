@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {\n  return;\n  print \"bad\";\n}\n\nprint f(); // expect: nil\n"
+input_file: crafting_interpreters_test_files/return/return_nil_if_no_value.lox
+---
+OUT: 
+nil
+
+===
+ERR:

@@ -347,7 +347,8 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                 Ok(())
             }
             _ => {
-                todo!("runtime error: can only call functions and classes")
+                let kind = RuntimeErrorKind::Msg("can only call functions and classes".into());
+                Err(self.runtime_error(kind, 2))
             }
         }
     }
@@ -370,11 +371,11 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
     fn call(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError<'a>> {
         if arg_count as usize != fun.arity {
-            todo!(
-                "runtime error: wrong number of arguments: expected {}, got {}",
-                fun.arity,
-                arg_count
-            );
+            let kind = RuntimeErrorKind::WrongNumberOfArguments {
+                expected: fun.arity,
+                got: arg_count as usize,
+            };
+            return Err(self.runtime_error(kind, 2));
         }
 
         // println!("Calling function {}", fun.name);

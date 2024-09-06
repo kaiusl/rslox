@@ -54,6 +54,8 @@ pub enum RuntimeErrorKind {
 
     InvalidOperands { expected: &'static str },
     UndefinedVariable { name: InternedString },
+    WrongNumberOfArguments { expected: usize, got: usize },
+    Msg(Cow<'static, str>),
 }
 
 impl fmt::Display for RuntimeErrorKind {
@@ -70,6 +72,16 @@ impl fmt::Display for RuntimeErrorKind {
             RuntimeErrorKind::UndefinedVariable { name } => {
                 write!(f, "undefined variable `{}`", **name)
             }
+
+            RuntimeErrorKind::WrongNumberOfArguments { expected, got } => {
+                write!(
+                    f,
+                    "wrong number of arguments, expected {}, got {}",
+                    expected, got
+                )
+            }
+
+            RuntimeErrorKind::Msg(msg) => write!(f, "{}", msg),
         }
     }
 }
