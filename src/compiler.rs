@@ -133,15 +133,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_fun_decl(&mut self, fun_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let global = self.compile_variable_name()?;
-        if let Some(last) = self.chunk.locals.last_mut() {
-            last.init = true;
-        }
-        let Some(name) = self.constants[global.item as usize].try_to_string() else {
-            todo!();
-        };
-        self.compile_function(fun_kw, name, FunType::Function)?;
-        self.compile_define_variable(global);
+        let (ident, idx, ident_span) = self.compile_variable_name()?;
+        self.compile_function(fun_kw, ident, FunType::Function)?;
+        self.compile_define_variable(Spanned::new(idx, ident_span));
 
         Ok(())
     }
@@ -149,7 +143,7 @@ impl<'a> Compiler<'a> {
     fn compile_function(
         &mut self,
         fun_kw: Spanned<Token<'a>>,
-        name: InternedString,
+        name: &str,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
         let prev_chunk = std::mem::replace(&mut self.chunk, CompileUnit::new(fun_type));
@@ -170,9 +164,9 @@ impl<'a> Compiler<'a> {
                     return Err(err.into());
                 }
 
-                let idx = self.compile_variable_name()?;
-                println!("{}: {}", idx, self.constants[idx.item as usize]);
-                self.compile_define_variable(idx);
+                let (_ident, idx, span) = self.compile_variable_name()?;
+                //println!("{}: {}", idx, self.constants[idx.item as usize]);
+                self.compile_define_variable(Spanned::new(idx, span));
 
                 if self.lexer.next_if(Token::is_comma)?.is_none() {
                     break;
@@ -192,7 +186,7 @@ impl<'a> Compiler<'a> {
         self.exit_scope();
         let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
         let fun = ObjFunction {
-            name,
+            name: InternedString::new(name.into()),
             arity,
             bytecode: function_bytecode.bytecode,
         };
@@ -203,38 +197,39 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let const_idx = self.compile_variable_name()?;
+        let (name, const_idx, ident_span) = self.compile_variable_name()?;
 
         if let Some(eq) = self.lexer.next_if(Token::is_eq)? {
             self.compile_expr()?;
         } else {
-            self.emit(Instruction::Nil, var_kw.span.combine(&const_idx.span))
+            self.emit(Instruction::Nil, var_kw.span.combine(&ident_span.clone()))
         }
 
         self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
 
-        self.compile_define_variable(const_idx);
+        self.compile_define_variable(Spanned::new(const_idx, ident_span));
 
         Ok(())
     }
 
-    fn compile_variable_name(&mut self) -> Result<Spanned<u8>, StaticError<'a>> {
+    fn compile_variable_name(&mut self) -> Result<(&'a str, u8, Span), StaticError<'a>> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
 
-        self.declare_variable(
-            ident.map(|ident| ident.clone().try_into_ident().unwrap().to_string()),
-        )?;
+        let ident_str = ident.map(|ident| ident.clone().try_into_ident().unwrap());
+
+        self.declare_variable(ident_str.clone())?;
         if self.chunk.scope_depth > 0 {
-            return Ok(ident.map_into(|_| 0));
+            let local_idx = u8::try_from(self.chunk.locals.len() - 1)
+                .expect("self.declare_variable checks that self.chunk.locals.len() <= u8::MAX");
+
+            return Ok((ident_str.item, local_idx, ident_str.span));
         }
 
-        match ident.item {
-            Token::Ident(s) => self.compile_ident_constant(s, ident.span),
-            _ => unreachable!(),
-        }
+        self.compile_ident_constant(ident_str.clone().map_into(|s| s.to_string()))
+            .map(|a| (ident_str.item, a, ident_str.span))
     }
 
-    fn compile_define_variable(&mut self, name: Spanned<u8>) {
+    fn compile_define_variable(&mut self, idx: Spanned<u8>) {
         if self.chunk.scope_depth > 0 {
             if let Some(last) = self.chunk.locals.last_mut() {
                 last.init = true;
@@ -242,10 +237,10 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        self.emit(Instruction::DefineGlobal(name.item), name.span);
+        self.emit(Instruction::DefineGlobal(idx.item), idx.span);
     }
 
-    fn declare_variable(&mut self, ident: Spanned<String>) -> Result<(), StaticError<'a>> {
+    fn declare_variable(&mut self, ident: Spanned<&str>) -> Result<(), StaticError<'a>> {
         if self.chunk.scope_depth == 0 {
             return Ok(());
         }
@@ -261,15 +256,16 @@ impl<'a> Compiler<'a> {
                 break;
             }
             if local.ident.item == ident.item {
-                let kind =
-                    CompileErrorKind::ReassignmentOfVariableInLocalScope { ident: ident.item };
+                let kind = CompileErrorKind::ReassignmentOfVariableInLocalScope {
+                    ident: ident.item.to_string(),
+                };
                 let err = CompileError::new(kind, ident.span);
                 return Err(err.into());
             }
         }
 
         let local = Local {
-            ident,
+            ident: ident.map_into(|s| s.to_string()),
             depth: self.chunk.scope_depth,
             init: false,
         };
@@ -278,18 +274,17 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_ident_constant(
-        &mut self,
-        ident: &str,
-        span: Span,
-    ) -> Result<Spanned<u8>, StaticError<'a>> {
-        let ident = Value::new_object(Object::String(InternedString::new(ident.to_string())));
+    fn compile_ident_constant(&mut self, ident: Spanned<String>) -> Result<u8, StaticError<'a>> {
+        let span = ident.span;
+        let ident = Value::new_object(Object::String(InternedString::new(ident.item)));
         let idx = self.add_constant(ident);
         let Ok(idx) = u8::try_from(idx) else {
-            todo!("Too many constants. Add another op to support more constants.");
+            let kind = CompileErrorKind::Msg("too many constants".into());
+            let err = CompileError::new(kind, span);
+            return Err(err.into());
         };
 
-        Ok(Spanned::new(idx, span))
+        Ok(idx)
     }
 
     fn synchronize(&mut self) {
@@ -743,11 +738,12 @@ impl<'a> Compiler<'a> {
                 )
             }
             None => {
-                let idx = self.compile_ident_constant(ident, span)?;
+                let idx =
+                    self.compile_ident_constant(Spanned::new(ident.to_string(), span.clone()))?;
                 (
-                    Instruction::GetGlobal(idx.item),
-                    Instruction::SetGlobal(idx.item),
-                    idx.span,
+                    Instruction::GetGlobal(idx),
+                    Instruction::SetGlobal(idx),
+                    span,
                 )
             }
         };
