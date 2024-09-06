@@ -8,7 +8,7 @@ use std::rc::Rc;
 use crate::bytecode::{ByteCode, BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::{self, Disassembler};
-use crate::value::{InternedString, ObjFunction, Object, Value};
+use crate::value::{InternedString, NativeFn, ObjFunction, Object, Value};
 
 use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
 
@@ -48,7 +48,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         #[cfg(feature = "debug_trace")]
         let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
 
-        Vm {
+        let mut vm = Vm {
             src: "",
             constants: Vec::new(),
             spans: HashMap::new(),
@@ -62,7 +62,11 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
             #[cfg(feature = "debug_trace")]
             disassembler,
-        }
+        };
+
+        vm.define_native("clock", Self::native_clock);
+
+        vm
     }
 
     pub fn compile(&mut self, input: &'a str) -> Result<(), ()>
@@ -331,10 +335,37 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError<'a>> {
         match callee {
             Value::Object(Object::Function(fun)) => self.call(&fun, arg_count),
+            Value::Object(Object::NativeFn(fun)) => {
+                let result = fun(
+                    arg_count,
+                    &self.stack[self.stack.len() - arg_count as usize..],
+                );
+                self.stack
+                    .truncate(self.stack.len() - arg_count as usize - 1);
+                self.stack.push(result);
+
+                Ok(())
+            }
             _ => {
                 todo!("runtime error: can only call functions and classes")
             }
         }
+    }
+
+    fn define_native(&mut self, name: impl Into<String> + AsRef<str>, fun: NativeFn) {
+        let name = self.intern_string(name);
+        let fun = Object::NativeFn(Rc::new(fun));
+        let fun = Value::new_object(fun);
+        self.globals.insert(name, fun);
+    }
+
+    fn native_clock(_arg_count: u8, _args: &[Value]) -> Value {
+        let time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+
+        Value::Number(time)
     }
 
     fn call(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError<'a>> {
@@ -346,9 +377,9 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
             );
         }
 
-        println!("Calling function {}", fun.name);
-        let disassembler = Disassembler::new(fun.bytecode.clone(), self.constants.clone());
-        disassembler.print();
+        // println!("Calling function {}", fun.name);
+        // let disassembler = Disassembler::new(fun.bytecode.clone(), self.constants.clone());
+        // disassembler.print();
 
         let frame = CallFrame {
             instructions: BytesCursor::new(fun.bytecode.code.clone()),
@@ -360,11 +391,12 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         Ok(())
     }
 
-    fn intern_string(&mut self, s: String) -> InternedString {
-        match self.strings.get(&s) {
+    fn intern_string(&mut self, s: impl Into<String> + AsRef<str>) -> InternedString {
+        let s_ref = s.as_ref();
+        match self.strings.get(s_ref) {
             Some(existing) => existing.clone(),
             None => {
-                let new = InternedString::new(s);
+                let new = InternedString::new(s.into());
                 self.strings.insert(new.clone());
                 new
             }

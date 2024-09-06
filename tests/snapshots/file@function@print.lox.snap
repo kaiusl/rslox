@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "fun foo() {}\nprint foo; // expect: <fn foo>\n\nprint clock; // expect: <native fn>\n"
+input_file: crafting_interpreters_test_files/function/print.lox
+---
+OUT: 
+<fun foo>
+<native fun>
+
+===
+ERR:

@@ -89,6 +89,7 @@ impl fmt::Debug for Value {
 pub enum Object {
     String(InternedString),
     Function(Rc<ObjFunction>),
+    NativeFn(Rc<NativeFn>)
 }
 
 impl fmt::Display for Object {
@@ -96,6 +97,7 @@ impl fmt::Display for Object {
         match self {
             Object::String(s) => write!(f, "{}", **s),
             Object::Function(fun) => write!(f, "{}", fun),
+            Object::NativeFn(_) => write!(f, "<native fun>"),
         }
     }
 }
@@ -134,6 +136,12 @@ impl Borrow<String> for InternedString {
     }
 }
 
+impl Borrow<str> for InternedString {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjFunction {
     pub arity: usize,
@@ -146,3 +154,5 @@ impl fmt::Display for ObjFunction {
         write!(f, "<fun {}>", self.name)
     }
 }
+
+pub type NativeFn = fn(u8, &[Value]) -> Value;

@@ -5,9 +5,14 @@ use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 fn main() {
-    let input = r#"fun foo(a) {
-  var a; // Error at 'a': Already a variable with this name in this scope.
-}"#;
+    let input = r#"fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+var start = clock();
+print fib(25);
+print clock() - start;"#;
 
     let compiler = Compiler::from_str(input);
     let (bytecode, constants) = compiler.compile().unwrap();
