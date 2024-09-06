@@ -522,7 +522,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
             .spans
             .get(&(self.frame.instructions.offset() - offset))
             .cloned()
-            .unwrap();
+            .map(|span| span.into());
         RuntimeError {
             kind,
             span,

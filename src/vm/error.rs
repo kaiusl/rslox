@@ -34,7 +34,7 @@ pub struct RuntimeError<'a> {
     #[source_code]
     pub src: Cow<'a, str>,
     #[label("here")]
-    pub span: Span,
+    pub span: Option<miette::SourceSpan>,
     pub kind: RuntimeErrorKind,
 }
 
