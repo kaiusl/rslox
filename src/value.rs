@@ -105,6 +105,7 @@ pub enum Object {
     Closure(Rc<ObjClosure>),
     Upvalue(Rc<RefCell<ObjUpvalue>>),
     Class(Rc<ObjClass>),
+    Instance(Rc<ObjInstance>),
 }
 
 impl fmt::Display for Object {
@@ -116,6 +117,7 @@ impl fmt::Display for Object {
             Object::Closure(closure) => write!(f, "{}", closure),
             Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
             Object::Class(cls) => write!(f, "{}", cls),
+            Object::Instance(inst) => write!(f, "{}", inst),
         }
     }
 }
@@ -262,5 +264,26 @@ impl fmt::Display for ObjClass {
 impl ObjClass {
     pub fn new(name: InternedString) -> Self {
         Self { name }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjInstance {
+    pub class: Rc<ObjClass>,
+    pub fields: HashMap<InternedString, Value>,
+}
+
+impl ObjInstance {
+    pub fn new(class: Rc<ObjClass>) -> Self {
+        Self {
+            class,
+            fields: HashMap::new(),
+        }
+    }
+}
+
+impl fmt::Display for ObjInstance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<instance {}>", self.class.name)
     }
 }

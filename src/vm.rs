@@ -9,7 +9,8 @@ use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::Disassembler;
 use crate::value::{
-    InternedString, NativeFn, ObjClass, ObjClosure, ObjFunction, ObjUpvalue, Object, Value,
+    InternedString, NativeFn, ObjClass, ObjClosure, ObjFunction, ObjInstance, ObjUpvalue, Object,
+    Value,
 };
 
 use self::error::{RuntimeError, RuntimeErrorKind};
@@ -456,6 +457,15 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .truncate(self.stack.len() - arg_count as usize - 1);
                 self.stack.push(result);
 
+                Ok(())
+            }
+            Value::Object(Object::Class(cls)) => {
+                let instance = ObjInstance::new(cls);
+
+                let instance = Value::new_object(Object::Instance(Rc::new(instance)));
+                self.stack
+                    .truncate(self.stack.len() - arg_count as usize - 1);
+                self.stack.push(instance);
                 Ok(())
             }
             _ => {
