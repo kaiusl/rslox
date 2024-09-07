@@ -62,7 +62,15 @@ impl Value {
         None
     }
 
-    pub fn try_to_class(&self) -> Option<Rc<ObjClass>> {
+    pub fn try_to_closure(&self) -> Option<Rc<ObjClosure>> {
+        if let Self::Object(Object::Closure(closure)) = self {
+            return Some(Rc::clone(closure));
+        }
+
+        None
+    }
+
+    pub fn try_to_class(&self) -> Option<Rc<RefCell<ObjClass>>> {
         if let Self::Object(Object::Class(cls)) = self {
             return Some(Rc::clone(cls));
         }
@@ -112,7 +120,7 @@ pub enum Object {
     NativeFn(Rc<NativeFn>),
     Closure(Rc<ObjClosure>),
     Upvalue(Rc<RefCell<ObjUpvalue>>),
-    Class(Rc<ObjClass>),
+    Class(Rc<RefCell<ObjClass>>),
     Instance(Rc<RefCell<ObjInstance>>),
 }
 
@@ -124,7 +132,7 @@ impl fmt::Display for Object {
             Object::NativeFn(_) => write!(f, "<native fun>"),
             Object::Closure(closure) => write!(f, "{}", closure),
             Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
-            Object::Class(cls) => write!(f, "{}", cls),
+            Object::Class(cls) => write!(f, "{}", RefCell::borrow(cls)),
             Object::Instance(inst) => write!(f, "{}", RefCell::borrow(inst)),
         }
     }
@@ -261,6 +269,7 @@ impl fmt::Display for ObjUpvalue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjClass {
     pub name: InternedString,
+    pub methods: HashMap<InternedString, Rc<ObjClosure>>,
 }
 
 impl fmt::Display for ObjClass {
@@ -271,18 +280,21 @@ impl fmt::Display for ObjClass {
 
 impl ObjClass {
     pub fn new(name: InternedString) -> Self {
-        Self { name }
+        Self {
+            name,
+            methods: HashMap::new(),
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjInstance {
-    pub class: Rc<ObjClass>,
+    pub class: Rc<RefCell<ObjClass>>,
     pub fields: HashMap<InternedString, Value>,
 }
 
 impl ObjInstance {
-    pub fn new(class: Rc<ObjClass>) -> Self {
+    pub fn new(class: Rc<RefCell<ObjClass>>) -> Self {
         Self {
             class,
             fields: HashMap::new(),
@@ -292,6 +304,6 @@ impl ObjInstance {
 
 impl fmt::Display for ObjInstance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<instance {}>", self.class.name)
+        write!(f, "<instance {}>", RefCell::borrow(&self.class).name)
     }
 }

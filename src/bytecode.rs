@@ -138,6 +138,7 @@ pub enum OpCode {
     Closure,
     CloseUpvalue,
     Class,
+    Method,
 }
 
 impl OpCode {
@@ -184,6 +185,7 @@ pub enum Instruction {
     Closure(u8),
     CloseUpvalue,
     Class(u8),
+    Method(u8),
 }
 
 impl Instruction {
@@ -221,6 +223,7 @@ impl Instruction {
             Instruction::Closure(_) => OpCode::Closure,
             Instruction::CloseUpvalue => OpCode::CloseUpvalue,
             Instruction::Class(_) => OpCode::Class,
+            Instruction::Method(_) => OpCode::Method,
         }
     }
 
@@ -256,7 +259,8 @@ impl Instruction {
             | Instruction::SetUpvalue(idx)
             | Instruction::GetProperty(idx)
             | Instruction::SetProperty(idx)
-            | Instruction::Class(idx) => {
+            | Instruction::Class(idx)
+            | Instruction::Method(idx) => {
                 dst.push(*idx);
             }
 
@@ -419,6 +423,15 @@ impl Instruction {
                     })
                 }
             },
+
+            Some(OpCode::Method) => match bytes.u8() {
+                Some(idx) => Instruction::Method(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected method index"),
+                    })
+                }
+            },
             Some(OpCode::CloseUpvalue) => Instruction::CloseUpvalue,
             None => {
                 return Err(DisassemblerError {
@@ -460,7 +473,8 @@ impl Instruction {
             | Instruction::SetUpvalue(idx)
             | Instruction::Class(idx)
             | Instruction::GetProperty(idx)
-            | Instruction::SetProperty(idx) => mem::size_of_val(idx),
+            | Instruction::SetProperty(idx)
+            | Instruction::Method(idx) => mem::size_of_val(idx),
 
             Instruction::Closure(idx) => mem::size_of_val(idx),
 
@@ -506,6 +520,7 @@ impl fmt::Display for Instruction {
             Instruction::Class(idx) => write!(f, "CLASS {}", idx),
             Instruction::GetProperty(idx) => write!(f, "GET_PROPERTY {}", idx),
             Instruction::SetProperty(idx) => write!(f, "SET_PROPERTY {}", idx),
+            Instruction::Method(idx) => write!(f, "METHOD {}", idx),
         }
     }
 }

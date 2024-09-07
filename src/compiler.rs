@@ -159,14 +159,38 @@ impl<'a> Compiler<'a> {
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = ident.span.clone();
         let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
-        self.declare_variable(ident)?;
+        self.declare_variable(ident.clone())?;
 
         self.emit(Instruction::Class(const_idx), span.clone());
-        self.compile_define_variable(Spanned::new(const_idx, span));
+        self.compile_define_variable(Spanned::new(const_idx, span.clone()));
+        self.compile_named_variable(&ident.item, span.clone(), false)?; // push class to the stack, so that methods can find it
 
         let _lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
 
+        while !self
+            .lexer
+            .is_next(|tok| matches!(tok, Token::RBrace | Token::Eof))?
+        {
+            self.compile_method()?;
+        }
+
         let _lbrace = self.consume(Token::is_rbrace, || &[TokenKind::RBrace])?;
+        self.emit(Instruction::Pop, span.clone()); // pop class
+
+        Ok(())
+    }
+
+    fn compile_method(&mut self) -> Result<(), StaticError<'a>> {
+        let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+        let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
+        let span = ident.span.clone();
+        let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
+        self.compile_function(
+            None,
+            ident.map(|ident| ident.to_string()),
+            FunType::Function,
+        )?;
+        self.emit(Instruction::Method(const_idx), span.clone());
 
         Ok(())
     }
@@ -177,7 +201,7 @@ impl<'a> Compiler<'a> {
             last.init = true;
         }
         self.compile_function(
-            fun_kw,
+            Some(fun_kw),
             Spanned::new(ident.to_string(), ident_span.clone()),
             FunType::Function,
         )?;
@@ -188,7 +212,7 @@ impl<'a> Compiler<'a> {
 
     fn compile_function(
         &mut self,
-        fun_kw: Spanned<Token<'a>>,
+        fun_kw: Option<Spanned<Token<'a>>>,
         name: Spanned<String>,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
@@ -246,7 +270,7 @@ impl<'a> Compiler<'a> {
         );
         let fun = Value::Object(Object::Function(Rc::new(fun)));
 
-        let span = fun_kw.span;
+        let span = fun_kw.map(|s| s.span).unwrap_or_else(|| name.span.clone());
         let idx = self.add_constant(fun);
         let Ok(idx) = u8::try_from(idx) else {
             todo!("Too many constants. Add another op to support more constants.");
@@ -998,15 +1022,9 @@ impl<'a> Compiler<'a> {
         if can_assign && maybe_eq.is_some() {
             let eq = maybe_eq.unwrap();
             self.compile_expr()?;
-            self.emit(
-                Instruction::SetProperty(name_const_idx),
-                ident.span,
-            );
+            self.emit(Instruction::SetProperty(name_const_idx), ident.span);
         } else {
-            self.emit(
-                Instruction::GetProperty(name_const_idx),
-                ident.span,
-            );
+            self.emit(Instruction::GetProperty(name_const_idx), ident.span);
         }
 
         Ok(())

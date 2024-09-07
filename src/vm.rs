@@ -461,8 +461,32 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         "tried to get class name from non string, it's a bug in VM or compiler",
                     );
                     let class = ObjClass::new(name);
-                    let class = Value::new_object(Object::Class(Rc::new(class)));
+                    let class = Value::new_object(Object::Class(Rc::new(RefCell::new(class))));
                     self.stack.push(class);
+                }
+
+                OpCode::Method => {
+                    // Stack: bottom, .., class, method
+
+                    let const_idx = self.frame.instructions.u8().unwrap();
+                    let name = self
+                        .frame
+                        .constants
+                        .get(const_idx as usize)
+                        .expect(
+                            "tried to get constant at invalid index, it's a bug in VM or compiler",
+                        )
+                        .clone();
+                    let name = name.try_to_string().expect(
+                        "tried to get method name from non string, it's a bug in VM or compiler",
+                    );
+                    let Some(class) = self.stack.get(self.stack.len() - 2).unwrap().try_to_class()
+                    else {
+                        panic!("tried to define method on non class, it's a bug in VM or compiler")
+                    };
+
+                    let method = self.stack.pop().unwrap().try_to_closure().unwrap();
+                    class.borrow_mut().methods.insert(name, method);
                 }
             }
         }
