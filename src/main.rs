@@ -32,22 +32,23 @@ fn main() {
         }
         None => {
             let mut vm = Vm::new();
-            let mut input = String::new();
+            let mut buffer = String::new();
             const PROMPT: &str = ">> ";
             loop {
                 print!("{}", PROMPT);
                 std::io::stdout().flush();
-                std::io::stdin().read_line(&mut input);
+                std::io::stdin().read_line(&mut buffer);
 
                 //let input = std::str::from_utf8(&buffer).unwrap();
-                println!("input: {}", input.trim_end_matches('\n'));
+                let input = buffer.trim_end_matches('\n');
+                println!("input: {}", input);
                 if input == "@exit" {
                     break;
                 }
                 vm.compile(&input);
                 vm.run(&input);
 
-                input.clear();
+                buffer.clear();
             }
         }
     }
