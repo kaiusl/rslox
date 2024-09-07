@@ -22,7 +22,6 @@ impl Value {
         Self::Object(obj)
     }
 
-    #[must_use]
     pub fn try_into_number(self) -> Result<f64, Self> {
         if let Self::Number(v) = self {
             Ok(v)
@@ -31,7 +30,6 @@ impl Value {
         }
     }
 
-    #[must_use]
     pub fn try_into_bool(self) -> Result<bool, Self> {
         if let Self::Bool(v) = self {
             Ok(v)
@@ -41,20 +39,16 @@ impl Value {
     }
 
     pub fn try_into_string(self) -> Result<InternedString, Self> {
-        if let Self::Object(o) = &self {
-            if let Object::String(s) = o {
-                return Ok(s.clone());
-            }
+        if let Self::Object(Object::String(s)) = self {
+            return Ok(s.clone());
         }
 
         Err(self)
     }
 
     pub fn try_to_string(&self) -> Option<InternedString> {
-        if let Self::Object(o) = self {
-            if let Object::String(s) = o {
-                return Some(s.clone());
-            }
+        if let Self::Object(Object::String(s)) = self {
+            return Some(s.clone());
         }
 
         None
@@ -63,6 +57,14 @@ impl Value {
     pub fn try_to_function(&self) -> Option<Rc<ObjFunction>> {
         if let Self::Object(Object::Function(fund)) = self {
             return Some(Rc::clone(fund));
+        }
+
+        None
+    }
+
+    pub fn try_to_class(&self) -> Option<Rc<ObjClass>> {
+        if let Self::Object(Object::Class(cls)) = self {
+            return Some(Rc::clone(cls));
         }
 
         None
@@ -102,6 +104,7 @@ pub enum Object {
     NativeFn(Rc<NativeFn>),
     Closure(Rc<ObjClosure>),
     Upvalue(Rc<RefCell<ObjUpvalue>>),
+    Class(Rc<ObjClass>),
 }
 
 impl fmt::Display for Object {
@@ -112,6 +115,7 @@ impl fmt::Display for Object {
             Object::NativeFn(_) => write!(f, "<native fun>"),
             Object::Closure(closure) => write!(f, "{}", closure),
             Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
+            Object::Class(cls) => write!(f, "{}", cls),
         }
     }
 }
@@ -241,5 +245,22 @@ impl fmt::Display for ObjUpvalue {
             ObjUpvalue::Open(idx) => write!(f, "<upvalue (open) {}>", idx),
             ObjUpvalue::Closed(v) => write!(f, "<upvalue (closed) {}>", v),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjClass {
+    pub name: InternedString,
+}
+
+impl fmt::Display for ObjClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<class {}>", self.name)
+    }
+}
+
+impl ObjClass {
+    pub fn new(name: InternedString) -> Self {
+        Self { name }
     }
 }

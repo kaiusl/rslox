@@ -135,6 +135,7 @@ pub enum OpCode {
     Call,
     Closure,
     CloseUpvalue,
+    Class,
 }
 
 impl OpCode {
@@ -178,6 +179,7 @@ pub enum Instruction {
     Call(u8),
     Closure(u8),
     CloseUpvalue,
+    Class(u8),
 }
 
 impl Instruction {
@@ -212,6 +214,7 @@ impl Instruction {
             Instruction::Call(_) => OpCode::Call,
             Instruction::Closure(_) => OpCode::Closure,
             Instruction::CloseUpvalue => OpCode::CloseUpvalue,
+            Instruction::Class(_) => OpCode::Class,
         }
     }
 
@@ -244,7 +247,8 @@ impl Instruction {
             | Instruction::SetLocal(idx)
             | Instruction::Call(idx)
             | Instruction::GetUpvalue(idx)
-            | Instruction::SetUpvalue(idx) => {
+            | Instruction::SetUpvalue(idx)
+            | Instruction::Class(idx) => {
                 dst.push(*idx);
             }
 
@@ -382,6 +386,14 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::Class) => match bytes.u8() {
+                Some(idx) => Instruction::Class(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected class index"),
+                    })
+                }
+            },
             Some(OpCode::CloseUpvalue) => Instruction::CloseUpvalue,
             None => {
                 return Err(DisassemblerError {
@@ -420,7 +432,8 @@ impl Instruction {
             | Instruction::SetLocal(idx)
             | Instruction::Call(idx)
             | Instruction::GetUpvalue(idx)
-            | Instruction::SetUpvalue(idx) => mem::size_of_val(idx),
+            | Instruction::SetUpvalue(idx)
+            | Instruction::Class(idx) => mem::size_of_val(idx),
 
             Instruction::Closure(idx) => mem::size_of_val(idx),
 
@@ -463,6 +476,7 @@ impl fmt::Display for Instruction {
             Instruction::Call(idx) => write!(f, "CALL {}", idx),
             Instruction::Closure(idx) => write!(f, "CLOSURE {}", idx),
             Instruction::CloseUpvalue => write!(f, "CLOSE_UPVALUE"),
+            Instruction::Class(idx) => write!(f, "CLASS {}", idx),
         }
     }
 }

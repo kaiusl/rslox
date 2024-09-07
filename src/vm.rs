@@ -8,7 +8,9 @@ use std::rc::Rc;
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::Disassembler;
-use crate::value::{InternedString, NativeFn, ObjClosure, ObjFunction, ObjUpvalue, Object, Value};
+use crate::value::{
+    InternedString, NativeFn, ObjClass, ObjClosure, ObjFunction, ObjUpvalue, Object, Value,
+};
 
 use self::error::{RuntimeError, RuntimeErrorKind};
 
@@ -389,6 +391,24 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 OpCode::CloseUpvalue => {
                     self.close_upvalues(self.stack.len() - 1);
                     self.stack.pop();
+                }
+
+                OpCode::Class => {
+                    let const_idx = self.frame.instructions.u8().unwrap();
+                    let name = self
+                        .frame
+                        .constants
+                        .get(const_idx as usize)
+                        .expect(
+                            "tried to get constant at invalid index, it's a bug in VM or compiler",
+                        )
+                        .clone();
+                    let name = name.try_to_string().expect(
+                        "tried to get class name from non string, it's a bug in VM or compiler",
+                    );
+                    let class = ObjClass::new(name);
+                    let class = Value::new_object(Object::Class(Rc::new(class)));
+                    self.stack.push(class);
                 }
             }
         }

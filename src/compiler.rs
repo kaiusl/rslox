@@ -132,12 +132,15 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
-        let result = match self
-            .lexer
-            .next_if(|tok| matches!(tok, Token::Keyword(Keyword::Var | Keyword::Fun)))?
-        {
+        let result = match self.lexer.next_if(|tok| {
+            matches!(
+                tok,
+                Token::Keyword(Keyword::Var | Keyword::Fun | Keyword::Class)
+            )
+        })? {
             Some(tok) if tok.item == Token::Keyword(Keyword::Var) => self.compile_var_decl(tok),
             Some(tok) if tok.item == Token::Keyword(Keyword::Fun) => self.compile_fun_decl(tok),
+            Some(tok) if tok.item == Token::Keyword(Keyword::Class) => self.compile_class_decl(tok),
             None => self.compile_stmt(),
             Some(_) => unreachable!(),
         };
@@ -149,6 +152,23 @@ impl<'a> Compiler<'a> {
                 Err(err)
             }
         }
+    }
+
+    fn compile_class_decl(&mut self, class_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+        let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
+        let span = ident.span.clone();
+        let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
+        self.declare_variable(ident)?;
+
+        self.emit(Instruction::Class(const_idx), span.clone());
+        self.compile_define_variable(Spanned::new(const_idx, span));
+
+        let _lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
+
+        let _lbrace = self.consume(Token::is_rbrace, || &[TokenKind::RBrace])?;
+
+        Ok(())
     }
 
     fn compile_fun_decl(&mut self, fun_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
