@@ -129,6 +129,7 @@ pub enum OpCode {
     Loop,
     Call,
     Closure,
+    CloseUpvalue,
 }
 
 impl OpCode {
@@ -171,6 +172,7 @@ pub enum Instruction {
     Loop(u16),
     Call(u8),
     Closure(u8),
+    CloseUpvalue,
 }
 
 impl Instruction {
@@ -204,6 +206,7 @@ impl Instruction {
             Instruction::Loop(_) => OpCode::Loop,
             Instruction::Call(_) => OpCode::Call,
             Instruction::Closure(_) => OpCode::Closure,
+            Instruction::CloseUpvalue => OpCode::CloseUpvalue,
         }
     }
 
@@ -225,7 +228,8 @@ impl Instruction {
             | Instruction::Gt
             | Instruction::Lt
             | Instruction::Print
-            | Instruction::Pop => {}
+            | Instruction::Pop
+            | Instruction::CloseUpvalue => {}
 
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
@@ -373,7 +377,7 @@ impl Instruction {
                     })
                 }
             },
-
+            Some(OpCode::CloseUpvalue) => Instruction::CloseUpvalue,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -400,7 +404,8 @@ impl Instruction {
             | Instruction::Gt
             | Instruction::Lt
             | Instruction::Print
-            | Instruction::Pop => 0,
+            | Instruction::Pop
+            | Instruction::CloseUpvalue => 0,
 
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
@@ -452,6 +457,7 @@ impl fmt::Display for Instruction {
             Instruction::Loop(offset) => write!(f, "LOOP {}", offset),
             Instruction::Call(idx) => write!(f, "CALL {}", idx),
             Instruction::Closure(idx) => write!(f, "CLOSURE {}", idx),
+            Instruction::CloseUpvalue => write!(f, "CLOSE_UPVALUE"),
         }
     }
 }

@@ -4,14 +4,9 @@ description: "var f1;\nvar f2;\nvar f3;\n\nvar i = 1;\nwhile (i < 4) {\n  var j 
 input_file: crafting_interpreters_test_files/while/closure_in_body.lox
 ---
 OUT: 
+1
+2
+3
 
 ===
-ERR: 
-  × undefined variable `j`
-   ╭─[8:19]
- 7 │   var j = i;
- 8 │   fun f() { print j; }
-   ·                   ┬
-   ·                   ╰── here
- 9 │ 
-   ╰────
+ERR:

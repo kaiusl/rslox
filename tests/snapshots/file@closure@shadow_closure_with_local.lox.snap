@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var foo = \"closure\";\n  fun f() {\n    {\n      print foo; // expect: closure\n      var foo = \"shadow\";\n      print foo; // expect: shadow\n    }\n    print foo; // expect: closure\n  }\n  f();\n}\n"
+input_file: crafting_interpreters_test_files/closure/shadow_closure_with_local.lox
+---
+OUT: 
+closure
+shadow
+closure
+
+===
+ERR:

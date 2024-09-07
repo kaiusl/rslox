@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "{\n  var f;\n\n  {\n    var a = \"a\";\n    fun f_() { print a; }\n    f = f_;\n  }\n\n  {\n    // Since a is out of scope, the local slot will be reused by b. Make sure\n    // that f still closes over a.\n    var b = \"b\";\n    f(); // expect: a\n  }\n}\n"
+input_file: crafting_interpreters_test_files/closure/reuse_closure_slot.lox
+---
+OUT: 
+a
+
+===
+ERR:

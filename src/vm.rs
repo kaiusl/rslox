@@ -1,12 +1,13 @@
 use core::panic;
 use std::cell::{Ref, RefCell};
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, Write};
 use std::rc::Rc;
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
+use crate::disassembler::Disassembler;
 use crate::value::{InternedString, NativeFn, ObjClosure, ObjFunction, ObjUpvalue, Object, Value};
 
 use self::error::{RuntimeError, RuntimeErrorKind};
@@ -22,6 +23,7 @@ pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub globals: HashMap<InternedString, Value>,
     pub call_frames: Vec<CallFrame>,
     pub frame: CallFrame,
+    pub open_upvalues: BTreeMap<usize, Rc<RefCell<ObjUpvalue>>>,
 
     output: OUT,
     outerr: OUTERR,
@@ -50,6 +52,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             strings: HashSet::new(),
             globals: HashMap::new(),
             call_frames: Vec::new(),
+            open_upvalues: BTreeMap::new(),
             output,
             outerr,
 
@@ -120,6 +123,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             match op {
                 OpCode::Return => {
                     let result = self.stack.pop().unwrap();
+                    self.close_upvalues(self.frame.slots);
 
                     self.stack.truncate(self.frame.slots);
 
@@ -133,7 +137,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 OpCode::Constant => {
                     let index = self.frame.instructions.u8().unwrap();
                     #[cfg(feature = "debug_disassemble")]
-                    let disassembler_constants = self.constants.clone();
+                    let disassembler_constants = self.frame.constants.clone();
 
                     let value = &self.frame.constants[index as usize];
 
@@ -144,19 +148,6 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     } else {
                         value.clone()
                     };
-
-                    #[cfg(feature = "debug_disassemble")]
-                    {
-                        if let Value::Object(Object::Function(fun)) = &value {
-                            println!("\n\n<fn {}>", &fun.name);
-                            let disassembler = Disassembler::new(
-                                fun.bytecode.clone(),
-                                fun.spans.clone(),
-                                disassembler_constants,
-                            );
-                            disassembler.print();
-                        }
-                    }
 
                     self.stack.push(value);
                 }
@@ -221,6 +212,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         self.stack.last().unwrap().clone();
                 }
                 OpCode::GetUpvalue => {
+                    dbg!(&self.frame.closure);
                     let upvalue_index = self.frame.instructions.u8().unwrap();
                     let upvalue = self
                         .frame
@@ -236,32 +228,32 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                             self.stack.push(value.clone());
                         }
                         ObjUpvalue::Closed(value) => {
-                            todo!()
+                            self.stack.push(value.clone());
                         }
                     }
                 }
                 OpCode::SetUpvalue => {
                     let upvalue_idx = self.frame.instructions.u8().unwrap();
-                    let upvalue = self
+                    let mut upvalue = self
                         .frame
                         .closure
                         .as_ref()
                         .expect("tried to set upvalue without closure")
                         .upvalues[upvalue_idx as usize]
-                        .borrow();
+                        .borrow_mut();
                     let value = self
                         .stack
                         .last()
                         .expect("tried to set upvalue without value on stack")
                         .clone();
-                    match &*upvalue {
+                    match &mut *upvalue {
                         ObjUpvalue::Open(stack_idx) => {
                             let stack_slot= self.stack.get_mut(*stack_idx)
                                 .expect("tried to set upvalue at invalid stack index, it's a bug in VM or compiler");
                             *stack_slot = value;
                         }
-                        ObjUpvalue::Closed(value) => {
-                            todo!()
+                        ObjUpvalue::Closed(upvalue) => {
+                            *upvalue = value;
                         }
                     }
                 }
@@ -363,6 +355,18 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     let idx = self.frame.instructions.u8().unwrap();
                     let fun = self.frame.constants.get(idx as usize).unwrap().clone();
                     let fun = fun.try_to_function().unwrap();
+
+                    #[cfg(feature = "debug_disassemble")]
+                    {
+                        println!("\n\n<fn {}>", &fun.name);
+                        let disassembler = Disassembler::new(
+                            fun.bytecode.clone(),
+                            fun.spans.clone(),
+                            self.frame.constants.clone(),
+                        );
+                        disassembler.print();
+                    }
+
                     let mut upvalues = Vec::with_capacity(fun.upvalues_count);
                     for _ in 0..fun.upvalues_count {
                         let is_local = self.frame.instructions.u8().unwrap();
@@ -382,14 +386,42 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         Value::new_object(Object::Closure(Rc::new(ObjClosure::new(fun, upvalues))));
                     self.stack.push(closure);
                 }
+
+                OpCode::CloseUpvalue => {
+                    self.close_upvalues(self.stack.len() - 1);
+                    self.stack.pop();
+                }
             }
         }
 
         Ok(())
     }
 
+    fn close_upvalues(&mut self, idx: usize) {
+        while let Some(last) = self.open_upvalues.last_entry() {
+            if *last.key() >= idx {
+                *last.get().borrow_mut() = ObjUpvalue::Closed(self.stack[*last.key()].clone());
+                last.remove();
+            } else {
+                break;
+            }
+        }
+    }
+
     fn capture_upvalue(&mut self, index: usize) -> Rc<RefCell<ObjUpvalue>> {
-        Rc::new(RefCell::new(ObjUpvalue::Open(index)))
+        for (stack_idx, upvalue) in self.open_upvalues.iter().rev() {
+            if *stack_idx == index {
+                return Rc::clone(upvalue);
+            }
+
+            if *stack_idx < index {
+                break;
+            }
+        }
+
+        let upvalue = Rc::new(RefCell::new(ObjUpvalue::Open(index)));
+        self.open_upvalues.insert(index, Rc::clone(&upvalue));
+        upvalue
     }
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {

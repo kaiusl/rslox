@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "var f;\n\nfun foo(param) {\n  fun f_() {\n    print param;\n  }\n  f = f_;\n}\nfoo(\"param\");\n\nf(); // expect: param\n"
+input_file: crafting_interpreters_test_files/closure/close_over_function_parameter.lox
+---
+OUT: 
+param
+
+===
+ERR:

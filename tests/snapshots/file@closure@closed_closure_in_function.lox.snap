@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "var f;\n\n{\n  var local = \"local\";\n  fun f_() {\n    print local;\n  }\n  f = f_;\n}\n\nf(); // expect: local\n"
+input_file: crafting_interpreters_test_files/closure/closed_closure_in_function.lox
+---
+OUT: 
+local
+
+===
+ERR:

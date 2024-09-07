@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "var f;\n\n{\n  var a = \"a\";\n  fun f_() {\n    print a;\n    print a;\n  }\n  f = f_;\n}\n\nf();\n// expect: a\n// expect: a\n"
+input_file: crafting_interpreters_test_files/closure/reference_closure_multiple_times.lox
+---
+OUT: 
+a
+a
+
+===
+ERR:

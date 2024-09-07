@@ -52,6 +52,7 @@ impl CompileUnit {
             ident,
             depth: 0,
             init: true,
+            is_captured: false,
         });
         Self {
             bytecode: ByteCode::new(),
@@ -313,6 +314,7 @@ impl<'a> Compiler<'a> {
             ident: ident.map_into(|s| s.to_string()),
             depth: self.chunk.scope_depth,
             init: false,
+            is_captured: false,
         };
         self.chunk.locals.push(local);
 
@@ -567,9 +569,12 @@ impl<'a> Compiler<'a> {
 
     fn exit_scope(&mut self) {
         while self.chunk.locals.last().map(|l| l.depth) == Some(self.chunk.scope_depth) {
-            self.chunk.locals.pop();
-
-            self.emit(Instruction::Pop, Span::new(0, 0, 0));
+            let last = self.chunk.locals.pop().unwrap();
+            if last.is_captured {
+                self.emit(Instruction::CloseUpvalue, Span::new(0, 0, 0));
+            } else {
+                self.emit(Instruction::Pop, Span::new(0, 0, 0));
+            }
         }
 
         self.chunk.scope_depth -= 1;
@@ -833,7 +838,12 @@ impl<'a> Compiler<'a> {
         };
 
         match idx {
-            Ok(idx) => return Self::add_upvalue(unit, idx, is_local),
+            Ok(idx) => {
+                if is_local {
+                    parent.locals[idx.item as usize].is_captured = true;
+                }
+                Self::add_upvalue(unit, idx, is_local)
+            }
             Err(_) => unreachable!(),
         }
     }
@@ -843,9 +853,9 @@ impl<'a> Compiler<'a> {
         idx: Spanned<u8>,
         is_local: bool,
     ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
-        for existing in unit.upvalues.iter() {
+        for (i, existing) in unit.upvalues.iter().enumerate() {
             if existing.index == idx.item && existing.is_local == is_local {
-                return Some(Ok(Spanned::new(existing.index, idx.span)));
+                return Some(Ok(Spanned::new(i as u8, idx.span)));
             }
         }
 
@@ -1053,4 +1063,5 @@ pub struct Local {
     pub ident: Spanned<String>,
     pub depth: usize,
     pub init: bool,
+    pub is_captured: bool,
 }

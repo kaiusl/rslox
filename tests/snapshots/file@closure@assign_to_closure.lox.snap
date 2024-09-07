@@ -1,0 +1,13 @@
+---
+source: tests/common/mod.rs
+description: "var f;\nvar g;\n\n{\n  var local = \"local\";\n  fun f_() {\n    print local;\n    local = \"after f\";\n    print local;\n  }\n  f = f_;\n\n  fun g_() {\n    print local;\n    local = \"after g\";\n    print local;\n  }\n  g = g_;\n}\n\nf();\n// expect: local\n// expect: after f\n\ng();\n// expect: after f\n// expect: after g\n"
+input_file: crafting_interpreters_test_files/closure/assign_to_closure.lox
+---
+OUT: 
+local
+after f
+after f
+after g
+
+===
+ERR:

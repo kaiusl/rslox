@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "var f;\n\nfun f1() {\n  var a = \"a\";\n  fun f2() {\n    var b = \"b\";\n    fun f3() {\n      var c = \"c\";\n      fun f4() {\n        print a;\n        print b;\n        print c;\n      }\n      f = f4;\n    }\n    f3();\n  }\n  f2();\n}\nf1();\n\nf();\n// expect: a\n// expect: b\n// expect: c\n"
+input_file: crafting_interpreters_test_files/closure/nested_closure.lox
+---
+OUT: 
+a
+b
+c
+
+===
+ERR:

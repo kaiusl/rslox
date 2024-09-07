@@ -8,7 +8,7 @@ use crate::value::Value;
 
 #[derive(Debug, Clone)]
 pub struct Disassembler {
-    pub constants: Vec<Value>,
+    pub constants: Rc<[Value]>,
     pub spans: Rc<HashMap<usize, Span>>,
     pub cursor: BytesCursor,
     pub prev_line: Option<usize>,
@@ -18,7 +18,7 @@ impl Disassembler {
     pub fn new(
         code: Rc<[u8]>,
         spans: Rc<HashMap<usize, Span>>,
-        constants: Vec<Value>,
+        constants: Rc<[Value]>,
     ) -> Disassembler {
         Disassembler {
             constants,

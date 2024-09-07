@@ -4,14 +4,12 @@ description: "var f1;\nvar f2;\nvar f3;\n\nfor (var i = 1; i < 4; i = i + 1) {\n
 input_file: crafting_interpreters_test_files/for/closure_in_body.lox
 ---
 OUT: 
+4
+1
+4
+2
+4
+3
 
 ===
-ERR: 
-  × undefined variable `i`
-   ╭─[8:11]
- 7 │   fun f() {
- 8 │     print i;
-   ·           ┬
-   ·           ╰── here
- 9 │     print j;
-   ╰────
+ERR:
