@@ -18,7 +18,7 @@ pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
     let mut outerr = Vec::<u8>::new();
     let mut vm = rslox::Vm::with_output(&mut out, &mut outerr);
     if vm.compile(&src).is_ok() {
-        vm.run();
+        vm.run(&src);
     };
 
     let root_dir = &ROOT[2..];
