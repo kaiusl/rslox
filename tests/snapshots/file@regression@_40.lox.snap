@@ -4,14 +4,7 @@ description: "fun caller(g) {\n  g();\n  // g should be a function, not nil.\n  
 input_file: crafting_interpreters_test_files/regression/_40.lox
 ---
 OUT: 
+false
 
 ===
-ERR: 
-  × undefined variable `capturedVar`
-    ╭─[13:5]
- 12 │     // Commenting the next line out prevents the bug!
- 13 │     capturedVar = "after";
-    ·     ─────┬─────
-    ·          ╰── here
- 14 │ 
-    ╰────
+ERR:

@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "// This is a regression test. When closing upvalues for discarded locals, it\n// wouldn't make sure it discarded the upvalue for the correct stack slot.\n//\n// Here we create two locals that can be closed over, but only the first one\n// actually is. When \"b\" goes out of scope, we need to make sure we don't\n// prematurely close \"a\".\nvar closure;\n\n{\n  var a = \"a\";\n\n  {\n    var b = \"b\";\n    fun returnA() {\n      return a;\n    }\n\n    closure = returnA;\n\n    if (false) {\n      fun returnB() {\n        return b;\n      }\n    }\n  }\n\n  print closure(); // expect: a\n}\n"
+input_file: crafting_interpreters_test_files/closure/unused_later_closure.lox
+---
+OUT: 
+a
+
+===
+ERR:

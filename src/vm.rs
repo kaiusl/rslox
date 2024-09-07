@@ -1,4 +1,5 @@
 use core::panic;
+use std::cell::{Ref, RefCell};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
@@ -6,7 +7,7 @@ use std::rc::Rc;
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
-use crate::value::{InternedString, NativeFn, ObjClosure, ObjFunction, Object, Value};
+use crate::value::{InternedString, NativeFn, ObjClosure, ObjFunction, ObjUpvalue, Object, Value};
 
 use self::error::{RuntimeError, RuntimeErrorKind};
 
@@ -219,6 +220,51 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     self.stack[self.frame.slots..][slot as usize] =
                         self.stack.last().unwrap().clone();
                 }
+                OpCode::GetUpvalue => {
+                    let upvalue_index = self.frame.instructions.u8().unwrap();
+                    let upvalue = self
+                        .frame
+                        .closure
+                        .as_ref()
+                        .expect("tried to get upvalue without closure")
+                        .upvalues[upvalue_index as usize]
+                        .borrow();
+                    match &*upvalue {
+                        ObjUpvalue::Open(stack_idx) => {
+                            let value = self.stack.get(*stack_idx)
+                                .expect("tried to get upvalue at invalid stack index, it's a bug in VM or compiler");
+                            self.stack.push(value.clone());
+                        }
+                        ObjUpvalue::Closed(value) => {
+                            todo!()
+                        }
+                    }
+                }
+                OpCode::SetUpvalue => {
+                    let upvalue_idx = self.frame.instructions.u8().unwrap();
+                    let upvalue = self
+                        .frame
+                        .closure
+                        .as_ref()
+                        .expect("tried to set upvalue without closure")
+                        .upvalues[upvalue_idx as usize]
+                        .borrow();
+                    let value = self
+                        .stack
+                        .last()
+                        .expect("tried to set upvalue without value on stack")
+                        .clone();
+                    match &*upvalue {
+                        ObjUpvalue::Open(stack_idx) => {
+                            let stack_slot= self.stack.get_mut(*stack_idx)
+                                .expect("tried to set upvalue at invalid stack index, it's a bug in VM or compiler");
+                            *stack_slot = value;
+                        }
+                        ObjUpvalue::Closed(value) => {
+                            todo!()
+                        }
+                    }
+                }
                 OpCode::Negate => {
                     let value = self.stack.pop();
                     match value {
@@ -317,13 +363,33 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     let idx = self.frame.instructions.u8().unwrap();
                     let fun = self.frame.constants.get(idx as usize).unwrap().clone();
                     let fun = fun.try_to_function().unwrap();
-                    let closure = Value::new_object(Object::Closure(Rc::new(ObjClosure::new(fun))));
+                    let mut upvalues = Vec::with_capacity(fun.upvalues_count);
+                    for _ in 0..fun.upvalues_count {
+                        let is_local = self.frame.instructions.u8().unwrap();
+                        let index = self.frame.instructions.u8().unwrap();
+                        let upvalue = if is_local == 1 {
+                            self.capture_upvalue(self.frame.slots + index as usize)
+                        } else {
+                            Rc::clone(
+                                &self.frame.closure.as_ref().unwrap().upvalues[index as usize],
+                            )
+                        };
+
+                        upvalues.push(upvalue);
+                    }
+
+                    let closure =
+                        Value::new_object(Object::Closure(Rc::new(ObjClosure::new(fun, upvalues))));
                     self.stack.push(closure);
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn capture_upvalue(&mut self, index: usize) -> Rc<RefCell<ObjUpvalue>> {
+        Rc::new(RefCell::new(ObjUpvalue::Open(index)))
     }
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
@@ -364,7 +430,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Value::Number(time)
     }
 
-    fn call_closure(&mut self, closure: &Rc<ObjClosure>, arg_count: u8) -> Result<(), RuntimeError> {
+    fn call_closure(
+        &mut self,
+        closure: &Rc<ObjClosure>,
+        arg_count: u8,
+    ) -> Result<(), RuntimeError> {
         let fun = &*closure.fun;
 
         if arg_count as usize != fun.arity {

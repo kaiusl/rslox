@@ -1,0 +1,27 @@
+---
+source: tests/common/mod.rs
+description: "var f;\n\nclass Foo {\n  method(param) {\n    fun f_() {\n      print param;\n    }\n    f = f_;\n  }\n}\n\nFoo().method(\"param\");\nf(); // expect: param\n"
+input_file: crafting_interpreters_test_files/closure/close_over_method_parameter.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
+   ╭─[3:1]
+ 2 │ 
+ 3 │ class Foo {
+   · ──┬──
+   ·   ╰── here
+ 4 │   method(param) {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[9:3]
+  8 │     f = f_;
+  9 │   }
+    ·   ┬
+    ·   ╰── here
+ 10 │ }
+    ╰────

@@ -101,6 +101,7 @@ pub enum Object {
     Function(Rc<ObjFunction>),
     NativeFn(Rc<NativeFn>),
     Closure(Rc<ObjClosure>),
+    Upvalue(Rc<RefCell<ObjUpvalue>>),
 }
 
 impl fmt::Display for Object {
@@ -110,6 +111,7 @@ impl fmt::Display for Object {
             Object::Function(fun) => write!(f, "{}", fun),
             Object::NativeFn(_) => write!(f, "<native fun>"),
             Object::Closure(closure) => write!(f, "{}", closure),
+            Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
         }
     }
 }
@@ -179,6 +181,7 @@ pub struct ObjFunction {
     pub bytecode: Rc<[u8]>,
     pub spans: Rc<HashMap<usize, Span>>,
     pub constants: Rc<[Value]>,
+    pub upvalues_count: usize,
 }
 
 impl ObjFunction {
@@ -187,6 +190,7 @@ impl ObjFunction {
         bytecode: ByteCode,
         constants: Rc<[Value]>,
         arity: usize,
+        upvalues_count: usize,
     ) -> Self {
         Self {
             arity,
@@ -194,6 +198,7 @@ impl ObjFunction {
             bytecode: bytecode.code.into(),
             spans: Rc::new(bytecode.spans),
             constants,
+            upvalues_count,
         }
     }
 }
@@ -209,16 +214,32 @@ pub type NativeFn = fn(u8, &[Value]) -> Value;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjClosure {
     pub fun: Rc<ObjFunction>,
+    pub upvalues: Vec<Rc<RefCell<ObjUpvalue>>>,
 }
 
 impl ObjClosure {
-    pub fn new(fun: Rc<ObjFunction>) -> Self {
-        Self { fun }
+    pub fn new(fun: Rc<ObjFunction>, upvalues: Vec<Rc<RefCell<ObjUpvalue>>>) -> Self {
+        Self { fun, upvalues }
     }
 }
 
 impl fmt::Display for ObjClosure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<closure {}>", self.fun.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjUpvalue {
+    Open(usize),
+    Closed(Value),
+}
+
+impl fmt::Display for ObjUpvalue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ObjUpvalue::Open(idx) => write!(f, "<upvalue (open) {}>", idx),
+            ObjUpvalue::Closed(v) => write!(f, "<upvalue (closed) {}>", v),
+        }
     }
 }

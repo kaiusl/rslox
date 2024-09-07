@@ -35,10 +35,17 @@ pub struct CompileUnit {
     pub scope_depth: usize,
     pub fun_type: FunType,
     pub constants: Vec<Value>,
+    pub parent: Option<Box<CompileUnit>>,
+    pub upvalues: Vec<Upvalue>,
+}
+
+pub struct Upvalue {
+    pub index: u8,
+    pub is_local: bool,
 }
 
 impl CompileUnit {
-    pub fn new(ty: FunType, ident: Spanned<String>) -> Self {
+    pub fn new(ty: FunType, ident: Spanned<String>, parent: Option<Box<CompileUnit>>) -> Self {
         //locals[0] is for VM's internal use
         let mut locals = Vec::with_capacity(1);
         locals.push(Local {
@@ -52,6 +59,8 @@ impl CompileUnit {
             scope_depth: 0,
             fun_type: ty,
             constants: Vec::new(),
+            parent,
+            upvalues: Vec::new(),
         }
     }
 }
@@ -74,6 +83,7 @@ impl<'a> Compiler<'a> {
             chunk: CompileUnit::new(
                 FunType::Script,
                 Spanned::new(String::from("main"), Span::from_len(0, 0, 0)),
+                None,
             ),
         }
     }
@@ -161,8 +171,11 @@ impl<'a> Compiler<'a> {
         name: Spanned<String>,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
-        let prev_chunk =
-            std::mem::replace(&mut self.chunk, CompileUnit::new(fun_type, name.clone()));
+        let prev_chunk = std::mem::replace(
+            &mut self.chunk,
+            CompileUnit::new(fun_type, name.clone(), None),
+        );
+        self.chunk.parent = Some(Box::new(prev_chunk));
 
         let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
 
@@ -200,13 +213,15 @@ impl<'a> Compiler<'a> {
         self.emit(Instruction::Return, lbrace.span.clone());
 
         self.exit_scope();
-        let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
+        let parent = *self.chunk.parent.take().unwrap();
+        let function_bytecode = std::mem::replace(&mut self.chunk, parent);
 
         let fun = ObjFunction::new(
             InternedString::new(name.item),
             function_bytecode.bytecode,
             function_bytecode.constants.into(),
             arity,
+            function_bytecode.upvalues.len(),
         );
         let fun = Value::Object(Object::Function(Rc::new(fun)));
 
@@ -217,6 +232,11 @@ impl<'a> Compiler<'a> {
         };
 
         self.emit(Instruction::Closure(idx), span);
+
+        for upvalue in function_bytecode.upvalues {
+            self.chunk.bytecode.code.push(upvalue.is_local as u8);
+            self.chunk.bytecode.code.push(upvalue.index);
+        }
 
         Ok(())
     }
@@ -751,7 +771,7 @@ impl<'a> Compiler<'a> {
         span: Span,
         can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
-        let (get, set, span) = match self.resolve_local(ident, span.clone()) {
+        let (get, set, span) = match Self::resolve_local(&self.chunk, ident, span.clone()) {
             Some(idx) => {
                 let idx = idx?;
                 (
@@ -760,15 +780,25 @@ impl<'a> Compiler<'a> {
                     idx.span,
                 )
             }
-            None => {
-                let idx =
-                    self.compile_ident_constant(Spanned::new(ident.to_string(), span.clone()))?;
-                (
-                    Instruction::GetGlobal(idx),
-                    Instruction::SetGlobal(idx),
-                    span,
-                )
-            }
+            None => match Self::resolve_upvalue(&mut self.chunk, ident, span.clone()) {
+                Some(idx) => {
+                    let idx = idx?;
+                    (
+                        Instruction::GetUpvalue(idx.item),
+                        Instruction::SetUpvalue(idx.item),
+                        idx.span,
+                    )
+                }
+                None => {
+                    let idx =
+                        self.compile_ident_constant(Spanned::new(ident.to_string(), span.clone()))?;
+                    (
+                        Instruction::GetGlobal(idx),
+                        Instruction::SetGlobal(idx),
+                        span,
+                    )
+                }
+            },
         };
 
         if can_assign {
@@ -785,12 +815,61 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn resolve_local(
-        &self,
+    fn resolve_upvalue(
+        unit: &mut CompileUnit,
         ident: &str,
         span: Span,
     ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
-        for (i, local) in self.chunk.locals.iter().enumerate().rev() {
+        let Some(parent) = &mut unit.parent else {
+            return None;
+        };
+
+        let (idx, is_local) = match Self::resolve_local(parent, ident, span.clone()) {
+            Some(idx) => (idx, true),
+            None => match Self::resolve_upvalue(parent, ident, span) {
+                Some(idx) => (idx, false),
+                None => return None,
+            },
+        };
+
+        match idx {
+            Ok(idx) => return Self::add_upvalue(unit, idx, is_local),
+            Err(_) => unreachable!(),
+        }
+    }
+
+    fn add_upvalue(
+        unit: &mut CompileUnit,
+        idx: Spanned<u8>,
+        is_local: bool,
+    ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
+        for existing in unit.upvalues.iter() {
+            if existing.index == idx.item && existing.is_local == is_local {
+                return Some(Ok(Spanned::new(existing.index, idx.span)));
+            }
+        }
+
+        if unit.upvalues.len() >= u8::MAX as usize {
+            let kind = CompileErrorKind::Msg("too many closure variables in function".into());
+            let err = CompileError::new(kind, idx.span);
+            return Some(Err(err.into()));
+        }
+
+        let upvalue = Upvalue {
+            index: idx.item,
+            is_local,
+        };
+
+        unit.upvalues.push(upvalue);
+        Some(Ok(Spanned::new((unit.upvalues.len() - 1) as u8, idx.span)))
+    }
+
+    fn resolve_local(
+        unit: &CompileUnit,
+        ident: &str,
+        span: Span,
+    ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
+        for (i, local) in unit.locals.iter().enumerate().rev() {
             if local.ident.item == ident {
                 assert!(i < u8::MAX as usize);
                 if !local.init {

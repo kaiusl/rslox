@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "var a = \"global\";\n\n{\n  fun assign() {\n    a = \"assigned\";\n  }\n\n  var a = \"inner\";\n  assign();\n  print a; // expect: inner\n}\n\nprint a; // expect: assigned\n"
+input_file: crafting_interpreters_test_files/closure/assign_to_shadowed_later.lox
+---
+OUT: 
+inner
+assigned
+
+===
+ERR:

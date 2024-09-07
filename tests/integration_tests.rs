@@ -1,6 +1,7 @@
 mod common;
 use common::*;
 
+
 test_dir!(
     operator;
     add_num_nil,
@@ -38,6 +39,7 @@ test_dir!(
     divide_nonnum_num,
 );
 
+
 test_dir!(
     function;
     recursion,
@@ -56,6 +58,7 @@ test_dir!(
     extra_arguments,
 );
 
+
 test_dir!(
     return;
     after_while,
@@ -67,11 +70,13 @@ test_dir!(
     after_if,
 );
 
+
 test_dir!(
     block;
     scope,
     empty,
 );
+
 
 test_dir!(
     if;
@@ -87,6 +92,7 @@ test_dir!(
     if,
 );
 
+
 test_dir!(
     logical_operator;
     or_truth,
@@ -94,6 +100,7 @@ test_dir!(
     and,
     and_truth,
 );
+
 
 test_dir!(
     for;
@@ -110,6 +117,7 @@ test_dir!(
     scope,
 );
 
+
 test_dir!(
     comments;
     line_at_eof,
@@ -117,6 +125,7 @@ test_dir!(
     unicode,
     only_line_comment,
 );
+
 
 test_dir!(
     assignment;
@@ -131,10 +140,12 @@ test_dir!(
     global,
 );
 
+
 test_dir!(
     nil;
     literal,
 );
+
 
 test_dir!(
     while;
@@ -146,6 +157,7 @@ test_dir!(
     return_closure,
     var_in_body,
 );
+
 
 test_dir!(
     variable;
@@ -173,11 +185,13 @@ test_dir!(
     in_middle_of_block,
 );
 
+
 test_dir!(
     regression;
     _40,
     _394,
 );
+
 
 test_dir!(
     bool;
@@ -185,10 +199,30 @@ test_dir!(
     not,
 );
 
+
 test_dir!(
     print;
     missing_argument,
 );
+
+
+test_dir!(
+    closure;
+    reference_closure_multiple_times,
+    nested_closure,
+    reuse_closure_slot,
+    close_over_later_variable,
+    assign_to_closure,
+    close_over_method_parameter,
+    shadow_closure_with_local,
+    closed_closure_in_function,
+    open_closure_in_function,
+    unused_later_closure,
+    assign_to_shadowed_later,
+    close_over_function_parameter,
+    unused_closure,
+);
+
 
 test_dir!(
     call;
@@ -199,6 +233,7 @@ test_dir!(
     nil,
 );
 
+
 test_dir!(
     number;
     leading_dot,
@@ -208,6 +243,7 @@ test_dir!(
     trailing_dot,
 );
 
+
 test_dir!(
     string;
     multiline,
@@ -216,4 +252,9 @@ test_dir!(
     unterminated,
 );
 
-test_dir!(empty_file, precedence, unexpected_character,);
+
+test_dir!(
+    empty_file,
+    precedence,
+    unexpected_character,
+);

@@ -122,6 +122,8 @@ pub enum OpCode {
     SetGlobal,
     GetLocal,
     SetLocal,
+    GetUpvalue,
+    SetUpvalue,
     JumpIfFalse,
     Jump,
     Loop,
@@ -162,6 +164,8 @@ pub enum Instruction {
     SetGlobal(u8),
     GetLocal(u8),
     SetLocal(u8),
+    GetUpvalue(u8),
+    SetUpvalue(u8),
     JumpIfFalse(u16),
     Jump(u16),
     Loop(u16),
@@ -193,6 +197,8 @@ impl Instruction {
             Instruction::SetGlobal(_) => OpCode::SetGlobal,
             Instruction::GetLocal(_) => OpCode::GetLocal,
             Instruction::SetLocal(_) => OpCode::SetLocal,
+            Instruction::GetUpvalue(_) => OpCode::GetUpvalue,
+            Instruction::SetUpvalue(_) => OpCode::SetUpvalue,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::Loop(_) => OpCode::Loop,
@@ -227,7 +233,9 @@ impl Instruction {
             | Instruction::SetGlobal(idx)
             | Instruction::GetLocal(idx)
             | Instruction::SetLocal(idx)
-            | Instruction::Call(idx) => {
+            | Instruction::Call(idx)
+            | Instruction::GetUpvalue(idx)
+            | Instruction::SetUpvalue(idx) => {
                 dst.push(*idx);
             }
 
@@ -308,6 +316,23 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::GetUpvalue) => match bytes.u8() {
+                Some(idx) => Instruction::GetUpvalue(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected upvalue index"),
+                    })
+                }
+            },
+
+            Some(OpCode::SetUpvalue) => match bytes.u8() {
+                Some(idx) => Instruction::SetUpvalue(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected upvalue index"),
+                    })
+                }
+            },
             Some(OpCode::JumpIfFalse) => match bytes.u16() {
                 Some(offset) => Instruction::JumpIfFalse(offset),
                 None => {
@@ -348,6 +373,7 @@ impl Instruction {
                     })
                 }
             },
+
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -382,7 +408,9 @@ impl Instruction {
             | Instruction::SetGlobal(idx)
             | Instruction::GetLocal(idx)
             | Instruction::SetLocal(idx)
-            | Instruction::Call(idx) => mem::size_of_val(idx),
+            | Instruction::Call(idx)
+            | Instruction::GetUpvalue(idx)
+            | Instruction::SetUpvalue(idx) => mem::size_of_val(idx),
 
             Instruction::Closure(idx) => mem::size_of_val(idx),
 
@@ -417,6 +445,8 @@ impl fmt::Display for Instruction {
             Instruction::SetGlobal(idx) => write!(f, "SET_GLOBAL {}", idx),
             Instruction::GetLocal(idx) => write!(f, "GET_LOCAL {}", idx),
             Instruction::SetLocal(idx) => write!(f, "SET_LOCAL {}", idx),
+            Instruction::GetUpvalue(idx) => write!(f, "GET_UPVALUE {}", idx),
+            Instruction::SetUpvalue(idx) => write!(f, "SET_UPVALUE {}", idx),
             Instruction::JumpIfFalse(offset) => write!(f, "JUMP_IF_FALSE {}", offset),
             Instruction::Jump(offset) => write!(f, "JUMP {}", offset),
             Instruction::Loop(offset) => write!(f, "LOOP {}", offset),
