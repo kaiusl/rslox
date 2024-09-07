@@ -18,7 +18,7 @@ impl Disassembler {
         Disassembler {
             constants,
             spans: bytecode.spans,
-            cursor: BytesCursor::new(bytecode.code),
+            cursor: BytesCursor::new(bytecode.code.into()),
             prev_line: None,
         }
     }

@@ -90,7 +90,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
         self.constants = constants;
         self.frame.spans = Rc::new(bytecode.spans);
-        self.frame.instructions = BytesCursor::new(bytecode.code);
+        self.frame.instructions = BytesCursor::new(bytecode.code.into());
         self.stack.push(Value::Nil);
         self.frame.slots = 0;
 
@@ -542,7 +542,7 @@ pub struct CallFrame {
 impl CallFrame {
     pub fn new() -> Self {
         Self {
-            instructions: BytesCursor::new(vec![]),
+            instructions: BytesCursor::new(Vec::new().into()),
             slots: 0,
             spans: Rc::new(HashMap::new()),
         }

@@ -739,7 +739,6 @@ impl<'a> Compiler<'a> {
         span: Span,
         can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
-        dbg!(ident, &span, self.chunk.bytecode.code.len());
         let (get, set, span) = match self.resolve_local(ident, span.clone()) {
             Some(idx) => {
                 let idx = idx?;

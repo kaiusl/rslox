@@ -148,7 +148,7 @@ impl Borrow<str> for InternedString {
 pub struct ObjFunction {
     pub arity: usize,
     pub name: InternedString,
-    pub bytecode: Vec<u8>,
+    pub bytecode: Rc<[u8]>,
     pub spans: Rc<HashMap<usize, Span>>,
 }
 
@@ -157,7 +157,7 @@ impl ObjFunction {
         Self {
             arity,
             name,
-            bytecode: bytecode.code,
+            bytecode: bytecode.code.into(),
             spans: Rc::new(bytecode.spans),
         }
     }

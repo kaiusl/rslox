@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::{fmt, mem};
 
 use crate::common::Span;
@@ -29,11 +30,11 @@ impl ByteCode {
 #[derive(Debug, Clone)]
 pub struct BytesCursor {
     offset: usize,
-    instructions: Vec<u8>,
+    instructions: Rc<[u8]>,
 }
 
 impl BytesCursor {
-    pub fn new(instructions: Vec<u8>) -> Self {
+    pub fn new(instructions: Rc<[u8]>) -> Self {
         BytesCursor {
             offset: 0,
             instructions,
@@ -41,7 +42,7 @@ impl BytesCursor {
     }
 
     pub fn as_instructions(&self) -> &[u8] {
-        self.instructions.as_slice()
+        &self.instructions
     }
 
     pub fn jump_forward(&mut self, count: usize) {
