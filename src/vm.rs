@@ -212,7 +212,6 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         self.stack.last().unwrap().clone();
                 }
                 OpCode::GetUpvalue => {
-                    dbg!(&self.frame.closure);
                     let upvalue_index = self.frame.instructions.u8().unwrap();
                     let upvalue = self
                         .frame

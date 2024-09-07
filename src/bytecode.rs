@@ -25,6 +25,11 @@ impl ByteCode {
         self.spans.insert(self.code.len(), span);
         instruction.write_bytes(&mut self.code);
     }
+
+    pub fn push_byte(&mut self, byte: u8, span: Span) {
+        self.spans.insert(self.code.len(), span);
+        self.code.push(byte);
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -232,11 +232,13 @@ impl<'a> Compiler<'a> {
             todo!("Too many constants. Add another op to support more constants.");
         };
 
-        self.emit(Instruction::Closure(idx), span);
+        self.emit(Instruction::Closure(idx), span.clone());
 
         for upvalue in function_bytecode.upvalues {
-            self.chunk.bytecode.code.push(upvalue.is_local as u8);
-            self.chunk.bytecode.code.push(upvalue.index);
+            self.chunk
+                .bytecode
+                .push_byte(upvalue.is_local as u8, span.clone());
+            self.chunk.bytecode.push_byte(upvalue.index, span.clone());
         }
 
         Ok(())
