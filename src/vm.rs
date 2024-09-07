@@ -16,7 +16,6 @@ type Stack<T> = Vec<T>;
 
 #[derive(Debug)]
 pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
-    pub constants: Vec<Value>,
     pub stack: Stack<Value>,
     pub strings: HashSet<InternedString>,
     pub globals: HashMap<InternedString, Value>,
@@ -45,7 +44,6 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
 
         let mut vm = Vm {
-            constants: Vec::new(),
             frame: CallFrame::new(),
             stack: Stack::new(),
             strings: HashSet::new(),
@@ -67,8 +65,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     where
         for<'b> &'b mut OUTERR: io::Write,
     {
-        let compiler =
-            crate::compiler::Compiler::from_str(input, std::mem::take(&mut self.constants));
+        let compiler = crate::compiler::Compiler::from_str(input);
         let (bytecode, constants) = match compiler.compile() {
             Ok(bytecode) => bytecode,
             Err(err) => {
@@ -83,7 +80,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             self.disassembler = Disassembler::new(bytecode.clone(), constants.clone());
         }
 
-        self.constants = constants;
+        self.frame.constants = constants.into();
         self.frame.spans = Rc::new(bytecode.spans);
         self.frame.instructions = BytesCursor::new(bytecode.code.into());
         self.stack.push(Value::Nil);
@@ -137,21 +134,15 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     #[cfg(feature = "debug_disassemble")]
                     let disassembler_constants = self.constants.clone();
 
-                    let value = &mut self.constants[index as usize];
+                    let value = &self.frame.constants[index as usize];
 
                     // Push constant to strings table
-                    if let Value::Object(obj) = value {
-                        match obj {
-                            Object::String(s) => match self.strings.get(&*s) {
-                                None => {
-                                    self.strings.insert(s.clone());
-                                }
-                                // We already have self string, make constant point to it
-                                Some(existing) => *s = existing.clone(),
-                            },
-                            _ => {}
-                        }
-                    }
+                    let value = if let Value::Object(Object::String(s)) = value {
+                        let s = s.to_string();
+                        Value::Object(Object::String(self.intern_string(s)))
+                    } else {
+                        value.clone()
+                    };
 
                     #[cfg(feature = "debug_disassemble")]
                     {
@@ -166,28 +157,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         }
                     }
 
-                    self.stack.push(value.clone());
+                    self.stack.push(value);
                 }
                 OpCode::DefineGlobal => {
                     let index = self.frame.instructions.u8().unwrap();
-                    let value = &mut self.constants[index as usize];
+                    let value = &self.frame.constants[index as usize];
 
-                    let name = if let Value::Object(obj) = value {
-                        match obj {
-                            Object::String(s) => {
-                                match self.strings.get(&*s) {
-                                    None => {
-                                        self.strings.insert(s.clone());
-                                    }
-                                    // We already have self string, make constant point to it
-                                    Some(existing) => *s = existing.clone(),
-                                }
-                                s.clone()
-                            }
-                            _ => {
-                                panic!("tried to define global with non string identifier, it's a bug in VM or compiler")
-                            }
-                        }
+                    let name = if let Value::Object(Object::String(s)) = value {
+                        self.intern_string(s.to_string())
                     } else {
                         panic!("tried to define global with non string identifier, it's a bug in VM or compiler")
                     };
@@ -201,7 +178,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 }
                 OpCode::GetGlobal => {
                     let index = self.frame.instructions.u8().unwrap();
-                    let Some(name) = self.constants[index as usize].try_to_string() else {
+                    let Some(name) = self.frame.constants[index as usize].try_to_string() else {
                         panic!("tried to get global with non string identifier, it's a bug in VM or compiler")
                     };
 
@@ -214,7 +191,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 }
                 OpCode::SetGlobal => {
                     let index = self.frame.instructions.u8().unwrap();
-                    let Some(name) = self.constants[index as usize].try_to_string() else {
+                    let Some(name) = self.frame.constants[index as usize].try_to_string() else {
                         panic!("tried to set global with non string identifier, it's a bug in VM or compiler")
                     };
                     match self.globals.entry(name) {
@@ -397,6 +374,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             instructions: BytesCursor::new(fun.bytecode.clone()),
             slots: self.stack.len() - arg_count as usize - 1,
             spans: Rc::clone(&fun.spans),
+            constants: Rc::clone(&fun.constants),
         };
         let prev_frame = std::mem::replace(&mut self.frame, frame);
         self.call_frames.push(prev_frame);
@@ -542,6 +520,7 @@ pub struct CallFrame {
     pub instructions: BytesCursor,
     pub slots: usize,
     pub spans: Rc<HashMap<usize, Span>>,
+    pub constants: Rc<[Value]>,
 }
 
 impl CallFrame {
@@ -550,6 +529,7 @@ impl CallFrame {
             instructions: BytesCursor::new(Vec::new().into()),
             slots: 0,
             spans: Rc::new(HashMap::new()),
+            constants: Rc::new([]),
         }
     }
 }

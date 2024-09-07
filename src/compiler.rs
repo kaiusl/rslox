@@ -27,7 +27,6 @@ pub struct Compiler<'a> {
     pub errors: StaticErrors<'a>,
 
     pub chunk: CompileUnit,
-    pub constants: Vec<Value>,
 }
 
 pub struct CompileUnit {
@@ -35,6 +34,7 @@ pub struct CompileUnit {
     pub locals: Vec<Local>,
     pub scope_depth: usize,
     pub fun_type: FunType,
+    pub constants: Vec<Value>,
 }
 
 impl CompileUnit {
@@ -51,12 +51,13 @@ impl CompileUnit {
             locals,
             scope_depth: 0,
             fun_type: ty,
+            constants: Vec::new(),
         }
     }
 }
 
 impl<'a> Compiler<'a> {
-    pub fn from_str(source: &'a str, constants: Vec<Value>) -> Self {
+    pub fn from_str(source: &'a str) -> Self {
         //let mut locals = Vec::with_capacity(1);
         // I don't think we need it atm, we'll add it later if we do need it
         // locals[0] is for VM's internal use
@@ -74,13 +75,16 @@ impl<'a> Compiler<'a> {
                 FunType::Script,
                 Spanned::new(String::from("main"), Span::from_len(0, 0, 0)),
             ),
-            constants,
         }
     }
 
     pub fn add_constant(&mut self, value: Value) -> usize {
-        self.constants.push(value);
-        self.constants.len() - 1
+        if let Some(idx) = self.chunk.constants.iter().position(|v| *v == value) {
+            return idx;
+        }
+
+        self.chunk.constants.push(value);
+        self.chunk.constants.len() - 1
     }
 
     pub fn compile(mut self) -> Result<(ByteCode, Vec<Value>), StaticErrors<'a>> {
@@ -112,7 +116,7 @@ impl<'a> Compiler<'a> {
         if !self.errors.is_empty() {
             Err(self.errors)
         } else {
-            Ok((self.chunk.bytecode, self.constants))
+            Ok((self.chunk.bytecode, self.chunk.constants))
         }
     }
 
@@ -201,6 +205,7 @@ impl<'a> Compiler<'a> {
         let fun = ObjFunction::new(
             InternedString::new(name.item),
             function_bytecode.bytecode,
+            function_bytecode.constants.into(),
             arity,
         );
         let fun = Value::Object(Object::Function(Rc::new(fun)));
@@ -567,8 +572,8 @@ impl<'a> Compiler<'a> {
         predicate: impl Fn(&Token<'a>) -> bool,
         expected_tokens: impl Fn() -> &'static [TokenKind],
     ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
-        match self.lexer.peek()? {
-            Some(token) if predicate(&token) => Ok(self.lexer.next().unwrap().unwrap()),
+        match self.lexer.next()? {
+            Some(token) if predicate(&token) => Ok(token),
 
             // Handle errors
             Some(token) => {
@@ -577,7 +582,7 @@ impl<'a> Compiler<'a> {
                     expected: expected_tokens(),
                     found: token.item.as_kind(),
                 };
-                let err = CompileError::new(kind, token.span.clone());
+                let err = CompileError::new(kind, token.span);
 
                 Err(err.into())
             }

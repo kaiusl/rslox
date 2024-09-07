@@ -144,21 +144,46 @@ impl Borrow<str> for InternedString {
     }
 }
 
+impl AsRef<str> for InternedString {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<InternedString> for String {
+    fn from(s: InternedString) -> Self {
+        s.0.to_string()
+    }
+}
+
+impl From<&InternedString> for String {
+    fn from(s: &InternedString) -> Self {
+        s.0.to_string()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjFunction {
     pub arity: usize,
     pub name: InternedString,
     pub bytecode: Rc<[u8]>,
     pub spans: Rc<HashMap<usize, Span>>,
+    pub constants: Rc<[Value]>,
 }
 
 impl ObjFunction {
-    pub fn new(name: InternedString, bytecode: ByteCode, arity: usize) -> Self {
+    pub fn new(
+        name: InternedString,
+        bytecode: ByteCode,
+        constants: Rc<[Value]>,
+        arity: usize,
+    ) -> Self {
         Self {
             arity,
             name,
             bytecode: bytecode.code.into(),
             spans: Rc::new(bytecode.spans),
+            constants,
         }
     }
 }
