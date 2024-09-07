@@ -41,6 +41,18 @@ test_dir!(
 
 
 test_dir!(
+    class;
+    inherit_self,
+    local_inherit_other,
+    local_inherit_self,
+    reference_self,
+    local_reference_self,
+    empty,
+    inherited_method,
+);
+
+
+test_dir!(
     function;
     recursion,
     nested_call_with_arguments,
@@ -221,6 +233,32 @@ test_dir!(
     assign_to_shadowed_later,
     close_over_function_parameter,
     unused_closure,
+);
+
+
+test_dir!(
+    field;
+    get_on_class,
+    get_on_function,
+    get_on_num,
+    set_on_string,
+    call_nonfunction_field,
+    get_on_nil,
+    undefined,
+    set_on_num,
+    set_on_function,
+    on_instance,
+    set_on_nil,
+    get_on_bool,
+    many,
+    set_on_class,
+    get_and_set_method,
+    method,
+    method_binds_this,
+    set_on_bool,
+    get_on_string,
+    set_evaluation_order,
+    call_function_field,
 );
 
 

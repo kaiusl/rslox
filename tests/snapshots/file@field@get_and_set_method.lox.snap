@@ -1,0 +1,35 @@
+---
+source: tests/common/mod.rs
+description: "// Bound methods have identity equality.\nclass Foo {\n  method(a) {\n    print \"method\";\n    print a;\n  }\n  other(a) {\n    print \"other\";\n    print a;\n  }\n}\n\nvar foo = Foo();\nvar method = foo.method;\n\n// Setting a property shadows the instance method.\nfoo.method = foo.other;\nfoo.method(1);\n// expect: other\n// expect: 1\n\n// The old method handle still points to the original method.\nmethod(2);\n// expect: method\n// expect: 2\n"
+input_file: crafting_interpreters_test_files/field/get_and_set_method.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected RBrace, found 'ident'
+   ╭─[3:3]
+ 2 │ class Foo {
+ 3 │   method(a) {
+   ·   ───┬──
+   ·      ╰── here
+ 4 │     print "method";
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[6:3]
+ 5 │     print a;
+ 6 │   }
+   ·   ┬
+   ·   ╰── here
+ 7 │   other(a) {
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+    ╭─[10:3]
+  9 │     print a;
+ 10 │   }
+    ·   ┬
+    ·   ╰── here
+ 11 │ }
+    ╰────

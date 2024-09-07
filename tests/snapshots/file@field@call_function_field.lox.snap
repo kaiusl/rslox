@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nfun bar(a, b) {\n  print \"bar\";\n  print a;\n  print b;\n}\n\nvar foo = Foo();\nfoo.bar = bar;\n\nfoo.bar(1, 2);\n// expect: bar\n// expect: 1\n// expect: 2\n"
+input_file: crafting_interpreters_test_files/field/call_function_field.lox
+---
+OUT: 
+bar
+1
+2
+
+===
+ERR:

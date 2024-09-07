@@ -129,6 +129,8 @@ pub enum OpCode {
     SetLocal,
     GetUpvalue,
     SetUpvalue,
+    GetProperty,
+    SetProperty,
     JumpIfFalse,
     Jump,
     Loop,
@@ -173,6 +175,8 @@ pub enum Instruction {
     SetLocal(u8),
     GetUpvalue(u8),
     SetUpvalue(u8),
+    GetProperty(u8),
+    SetProperty(u8),
     JumpIfFalse(u16),
     Jump(u16),
     Loop(u16),
@@ -208,6 +212,8 @@ impl Instruction {
             Instruction::SetLocal(_) => OpCode::SetLocal,
             Instruction::GetUpvalue(_) => OpCode::GetUpvalue,
             Instruction::SetUpvalue(_) => OpCode::SetUpvalue,
+            Instruction::GetProperty(_) => OpCode::GetProperty,
+            Instruction::SetProperty(_) => OpCode::SetProperty,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::Loop(_) => OpCode::Loop,
@@ -248,6 +254,8 @@ impl Instruction {
             | Instruction::Call(idx)
             | Instruction::GetUpvalue(idx)
             | Instruction::SetUpvalue(idx)
+            | Instruction::GetProperty(idx)
+            | Instruction::SetProperty(idx)
             | Instruction::Class(idx) => {
                 dst.push(*idx);
             }
@@ -394,6 +402,23 @@ impl Instruction {
                     })
                 }
             },
+
+            Some(OpCode::GetProperty) => match bytes.u8() {
+                Some(idx) => Instruction::GetProperty(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected property index"),
+                    })
+                }
+            },
+            Some(OpCode::SetProperty) => match bytes.u8() {
+                Some(idx) => Instruction::SetProperty(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected property index"),
+                    })
+                }
+            },
             Some(OpCode::CloseUpvalue) => Instruction::CloseUpvalue,
             None => {
                 return Err(DisassemblerError {
@@ -433,7 +458,9 @@ impl Instruction {
             | Instruction::Call(idx)
             | Instruction::GetUpvalue(idx)
             | Instruction::SetUpvalue(idx)
-            | Instruction::Class(idx) => mem::size_of_val(idx),
+            | Instruction::Class(idx)
+            | Instruction::GetProperty(idx)
+            | Instruction::SetProperty(idx) => mem::size_of_val(idx),
 
             Instruction::Closure(idx) => mem::size_of_val(idx),
 
@@ -477,6 +504,8 @@ impl fmt::Display for Instruction {
             Instruction::Closure(idx) => write!(f, "CLOSURE {}", idx),
             Instruction::CloseUpvalue => write!(f, "CLOSE_UPVALUE"),
             Instruction::Class(idx) => write!(f, "CLASS {}", idx),
+            Instruction::GetProperty(idx) => write!(f, "GET_PROPERTY {}", idx),
+            Instruction::SetProperty(idx) => write!(f, "SET_PROPERTY {}", idx),
         }
     }
 }

@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nvar foo = Foo();\nfoo.bar = \"not fn\";\n\nfoo.bar(); // expect runtime error: Can only call functions and classes.\n"
+input_file: crafting_interpreters_test_files/field/call_nonfunction_field.lox
+---
+OUT: 
+
+===
+ERR: 
+  × can only call functions and classes
+   ╭─[6:8]
+ 5 │ 
+ 6 │ foo.bar(); // expect runtime error: Can only call functions and classes.
+   ·        ┬
+   ·        ╰── here
+   ╰────

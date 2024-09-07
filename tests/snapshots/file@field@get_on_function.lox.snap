@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "fun foo() {}\n\nfoo.bar; // expect runtime error: Only instances have properties.\n"
+input_file: crafting_interpreters_test_files/field/get_on_function.lox
+---
+OUT: 
+
+===
+ERR: 
+  × only instances have properties
+   ╭─[3:5]
+ 2 │ 
+ 3 │ foo.bar; // expect runtime error: Only instances have properties.
+   ·     ─┬─
+   ·      ╰── here
+   ╰────

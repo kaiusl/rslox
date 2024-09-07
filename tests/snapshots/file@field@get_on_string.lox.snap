@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "\"str\".foo; // expect runtime error: Only instances have properties.\n"
+input_file: crafting_interpreters_test_files/field/get_on_string.lox
+---
+OUT: 
+
+===
+ERR: 
+  × only instances have properties
+   ╭────
+ 1 │ "str".foo; // expect runtime error: Only instances have properties.
+   ·       ─┬─
+   ·        ╰── here
+   ╰────

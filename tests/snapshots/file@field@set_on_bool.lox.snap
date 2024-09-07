@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "true.foo = \"value\"; // expect runtime error: Only instances have fields.\n"
+input_file: crafting_interpreters_test_files/field/set_on_bool.lox
+---
+OUT: 
+
+===
+ERR: 
+  × only instances have properties
+   ╭────
+ 1 │ true.foo = "value"; // expect runtime error: Only instances have fields.
+   ·      ─┬─
+   ·       ╰── here
+   ╰────

@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "{\n  class Foo < Foo {} // Error at 'Foo': A class can't inherit from itself.\n}\n// [c line 5] Error at end: Expect '}' after block.\n"
+input_file: crafting_interpreters_test_files/class/local_inherit_self.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected LBrace, found '<'
+   ╭─[2:13]
+ 1 │ {
+ 2 │   class Foo < Foo {} // Error at 'Foo': A class can't inherit from itself.
+   ·             ┬
+   ·             ╰── here
+ 3 │ }
+   ╰────

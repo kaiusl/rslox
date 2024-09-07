@@ -980,8 +980,36 @@ impl<'a> Compiler<'a> {
             Token::Keyword(Keyword::And) => self.compile_and(infix, can_assign),
             Token::Keyword(Keyword::Or) => self.compile_or(infix, can_assign),
             Token::LParen => self.compile_call(infix, can_assign),
+            Token::Dot => self.compile_dot(infix, can_assign),
             _ => unreachable!("Invalid infix operator."),
         }
+    }
+
+    fn compile_dot(
+        &mut self,
+        dot: Spanned<Token<'a>>,
+        can_assign: bool,
+    ) -> Result<(), StaticError<'a>> {
+        let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+        let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
+        let name_const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
+
+        let maybe_eq = self.lexer.next_if(Token::is_eq)?;
+        if can_assign && maybe_eq.is_some() {
+            let eq = maybe_eq.unwrap();
+            self.compile_expr()?;
+            self.emit(
+                Instruction::SetProperty(name_const_idx),
+                ident.span,
+            );
+        } else {
+            self.emit(
+                Instruction::GetProperty(name_const_idx),
+                ident.span,
+            );
+        }
+
+        Ok(())
     }
 
     fn compile_call(
@@ -1073,7 +1101,7 @@ impl Precedence {
             Token::Lt | Token::LtEq | Token::Gt | Token::GtEq => Precedence::Comparison,
             Token::Keyword(Keyword::And) => Precedence::And,
             Token::Keyword(Keyword::Or) => Precedence::Or,
-            Token::LParen => Precedence::Call,
+            Token::LParen | Token::Dot => Precedence::Call,
 
             _ => Self::None,
         }

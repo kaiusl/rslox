@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nprint Foo; // expect: Foo\n"
+input_file: crafting_interpreters_test_files/class/empty.lox
+---
+OUT: 
+<class Foo>
+
+===
+ERR:

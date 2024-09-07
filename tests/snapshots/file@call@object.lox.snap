@@ -7,12 +7,10 @@ OUT:
 
 ===
 ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
-   ╭─[1:1]
- 1 │ class Foo {}
-   · ──┬──
-   ·   ╰── here
- 2 │ 
+  × can only call functions and classes
+   ╭─[4:4]
+ 3 │ var foo = Foo();
+ 4 │ foo(); // expect runtime error: Can only call functions and classes.
+   ·    ┬
+   ·    ╰── here
    ╰────

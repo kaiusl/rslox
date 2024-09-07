@@ -1,0 +1,13 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nvar foo = Foo();\n\nprint foo.bar = \"bar value\"; // expect: bar value\nprint foo.baz = \"baz value\"; // expect: baz value\n\nprint foo.bar; // expect: bar value\nprint foo.baz; // expect: baz value\n"
+input_file: crafting_interpreters_test_files/field/on_instance.lox
+---
+OUT: 
+bar value
+baz value
+bar value
+baz value
+
+===
+ERR:

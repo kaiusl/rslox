@@ -70,6 +70,14 @@ impl Value {
         None
     }
 
+    pub fn try_to_instance(&self) -> Option<Rc<RefCell<ObjInstance>>> {
+        if let Self::Object(Object::Instance(inst)) = self {
+            return Some(Rc::clone(inst));
+        }
+
+        None
+    }
+
     pub fn is_falsey(&self) -> bool {
         matches!(self, Value::Nil | Value::Bool(false))
     }
@@ -105,7 +113,7 @@ pub enum Object {
     Closure(Rc<ObjClosure>),
     Upvalue(Rc<RefCell<ObjUpvalue>>),
     Class(Rc<ObjClass>),
-    Instance(Rc<ObjInstance>),
+    Instance(Rc<RefCell<ObjInstance>>),
 }
 
 impl fmt::Display for Object {
@@ -117,7 +125,7 @@ impl fmt::Display for Object {
             Object::Closure(closure) => write!(f, "{}", closure),
             Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
             Object::Class(cls) => write!(f, "{}", cls),
-            Object::Instance(inst) => write!(f, "{}", inst),
+            Object::Instance(inst) => write!(f, "{}", RefCell::borrow(inst)),
         }
     }
 }

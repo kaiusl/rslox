@@ -259,6 +259,59 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         }
                     }
                 }
+                OpCode::GetProperty => {
+                    let Some(instance) = self.stack.last().unwrap().try_to_instance() else {
+                        let kind = RuntimeErrorKind::Msg("only instances have properties".into());
+                        return Err(self.runtime_error(kind, 1));
+                    };
+                    let instance = instance.borrow();
+                    let name_idx = self.frame.instructions.u8().unwrap();
+                    let name = self
+                        .frame
+                        .constants
+                        .get(name_idx as usize)
+                        .expect("tried to get property name at invalid index, it's a bug in VM or compiler")
+                        .try_to_string()
+                        .expect("tried to get property name from non string, it's a bug in VM or compiler");
+                    let value = instance.fields.get(&name);
+                    match value {
+                        Some(value) => {
+                            self.stack.pop(); // instance
+                            self.stack.push(value.clone());
+                        }
+                        None => {
+                            let kind = RuntimeErrorKind::UndefinedProperty { name };
+                            return Err(self.runtime_error(kind, 2));
+                        }
+                    }
+                }
+                OpCode::SetProperty => {
+                    // Stack: bottom, .., instance, value_to_set
+
+                    let Some(instance) = self
+                        .stack
+                        .get(self.stack.len() - 2)
+                        .unwrap()
+                        .try_to_instance()
+                    else {
+                        let kind = RuntimeErrorKind::Msg("only instances have properties".into());
+                        return Err(self.runtime_error(kind, 1));
+                    };
+                    let name_idx = self.frame.instructions.u8().unwrap();
+                    let name = self
+                        .frame
+                        .constants
+                        .get(name_idx as usize)
+                        .expect("tried to get property name at invalid index, it's a bug in VM or compiler")
+                        .try_to_string()
+                        .expect("tried to set property name from non string, it's a bug in VM or compiler");
+                    let value = self.stack.last().unwrap().clone();
+
+                    instance.borrow_mut().fields.insert(name, value);
+                    let value = self.stack.pop().unwrap();
+                    self.stack.pop(); //instance
+                    self.stack.push(value);
+                }
                 OpCode::Negate => {
                     let value = self.stack.pop();
                     match value {
@@ -462,7 +515,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             Value::Object(Object::Class(cls)) => {
                 let instance = ObjInstance::new(cls);
 
-                let instance = Value::new_object(Object::Instance(Rc::new(instance)));
+                let instance = Value::new_object(Object::Instance(Rc::new(RefCell::new(instance))));
                 self.stack
                     .truncate(self.stack.len() - arg_count as usize - 1);
                 self.stack.push(instance);

@@ -4,24 +4,14 @@ description: "// Bound methods have identity equality.\nclass Foo {}\nclass Bar 
 input_file: crafting_interpreters_test_files/operator/equals_class.lox
 ---
 OUT: 
+true
+false
+false
+true
+false
+false
+false
+false
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
-   ╭─[2:1]
- 1 │ // Bound methods have identity equality.
- 2 │ class Foo {}
-   · ──┬──
-   ·   ╰── here
- 3 │ class Bar {}
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
-   ╭─[3:1]
- 2 │ class Foo {}
- 3 │ class Bar {}
-   · ──┬──
-   ·   ╰── here
- 4 │ 
-   ╰────
+ERR:

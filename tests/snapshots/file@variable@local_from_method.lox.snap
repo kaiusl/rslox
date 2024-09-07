@@ -9,13 +9,13 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'class'
-   ╭─[3:1]
- 2 │ 
+Error:   × expected RBrace, found 'ident'
+   ╭─[4:3]
  3 │ class Foo {
-   · ──┬──
-   ·   ╰── here
  4 │   method() {
+   ·   ───┬──
+   ·      ╰── here
+ 5 │     print foo;
    ╰────
 Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
    ╭─[6:3]

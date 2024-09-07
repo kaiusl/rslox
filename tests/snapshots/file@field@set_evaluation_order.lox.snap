@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "undefined1.bar // expect runtime error: Undefined variable 'undefined1'.\n  = undefined2;"
+input_file: crafting_interpreters_test_files/field/set_evaluation_order.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `undefined1`
+   ╭─[1:1]
+ 1 │ undefined1.bar // expect runtime error: Undefined variable 'undefined1'.
+   · ─────┬────
+   ·      ╰── here
+ 2 │   = undefined2;
+   ╰────

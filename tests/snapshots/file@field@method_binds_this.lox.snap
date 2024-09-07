@@ -1,0 +1,35 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  sayName(a) {\n    print this.name;\n    print a;\n  }\n}\n\nvar foo1 = Foo();\nfoo1.name = \"foo1\";\n\nvar foo2 = Foo();\nfoo2.name = \"foo2\";\n\n// Store the method reference on another object.\nfoo2.fn = foo1.sayName;\n// Still retains original receiver.\nfoo2.fn(1);\n// expect: foo1\n// expect: 1\n"
+input_file: crafting_interpreters_test_files/field/method_binds_this.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected RBrace, found 'ident'
+   ╭─[2:3]
+ 1 │ class Foo {
+ 2 │   sayName(a) {
+   ·   ───┬───
+   ·      ╰── here
+ 3 │     print this.name;
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'this'
+   ╭─[3:11]
+ 2 │   sayName(a) {
+ 3 │     print this.name;
+   ·           ──┬─
+   ·             ╰── here
+ 4 │     print a;
+   ╰────
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+   ╭─[5:3]
+ 4 │     print a;
+ 5 │   }
+   ·   ┬
+   ·   ╰── here
+ 6 │ }
+   ╰────
