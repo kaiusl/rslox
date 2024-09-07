@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "fun caller(g) {\n  g();\n  // g should be a function, not nil.\n  print g == nil; // expect: false\n}\n\nfun callCaller() {\n  var capturedVar = \"before\";\n  var a = \"a\";\n\n  fun f() {\n    // Commenting the next line out prevents the bug!\n    capturedVar = \"after\";\n\n    // Returning anything also fixes it, even nil:\n    //return nil;\n  }\n\n  caller(f);\n}\n\ncallCaller();\n"
+input_file: crafting_interpreters_test_files/regression/_40.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `capturedVar`
+    ╭─[13:5]
+ 12 │     // Commenting the next line out prevents the bug!
+ 13 │     capturedVar = "after";
+    ·     ─────┬─────
+    ·          ╰── here
+ 14 │ 
+    ╰────

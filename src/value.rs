@@ -1,11 +1,13 @@
 use core::fmt;
 use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::bytecode::ByteCode;
+use crate::common::Span;
 
 #[derive(Clone, PartialEq)]
 pub enum Value {
@@ -89,7 +91,7 @@ impl fmt::Debug for Value {
 pub enum Object {
     String(InternedString),
     Function(Rc<ObjFunction>),
-    NativeFn(Rc<NativeFn>)
+    NativeFn(Rc<NativeFn>),
 }
 
 impl fmt::Display for Object {
@@ -146,7 +148,19 @@ impl Borrow<str> for InternedString {
 pub struct ObjFunction {
     pub arity: usize,
     pub name: InternedString,
-    pub bytecode: ByteCode,
+    pub bytecode: Vec<u8>,
+    pub spans: Rc<HashMap<usize, Span>>,
+}
+
+impl ObjFunction {
+    pub fn new(name: InternedString, bytecode: ByteCode, arity: usize) -> Self {
+        Self {
+            arity,
+            name,
+            bytecode: bytecode.code,
+            spans: Rc::new(bytecode.spans),
+        }
+    }
 }
 
 impl fmt::Display for ObjFunction {

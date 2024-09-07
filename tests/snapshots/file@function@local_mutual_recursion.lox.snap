@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "{\n  fun isEven(n) {\n    if (n == 0) return true;\n    return isOdd(n - 1); // expect runtime error: Undefined variable 'isOdd'.\n  }\n\n  fun isOdd(n) {\n    if (n == 0) return false;\n    return isEven(n - 1);\n  }\n\n  isEven(4);\n}"
+input_file: crafting_interpreters_test_files/function/local_mutual_recursion.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `isOdd`
+   ╭─[4:12]
+ 3 │     if (n == 0) return true;
+ 4 │     return isOdd(n - 1); // expect runtime error: Undefined variable 'isOdd'.
+   ·            ──┬──
+   ·              ╰── here
+ 5 │   }
+   ╰────

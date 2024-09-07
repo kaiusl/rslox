@@ -5,14 +5,20 @@ use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 fn main() {
-    let input = r#"fun fib(n) {
-  if (n < 2) return n;
-  return fib(n - 2) + fib(n - 1);
-}
+    let input = r#"{
+  fun isEven(n) {
+    if (n == 0) return true;
+    return isOdd(n - 1); // expect runtime error: Undefined variable 'isOdd'.
+  }
 
-var start = clock();
-print fib(25);
-print clock() - start;"#;
+  fun isOdd(n) {
+    if (n == 0) return false;
+    return isEven(n - 1);
+  }
+
+  isEven(4);
+}
+"#;
 
     let compiler = Compiler::from_str(input);
     let (bytecode, constants) = compiler.compile().unwrap();

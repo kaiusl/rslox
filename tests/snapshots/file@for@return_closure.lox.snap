@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "fun f() {\n  for (;;) {\n    var i = \"i\";\n    fun g() { print i; }\n    return g;\n  }\n}\n\nvar h = f();\nh(); // expect: i\n"
+input_file: crafting_interpreters_test_files/for/return_closure.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `i`
+   ╭─[4:21]
+ 3 │     var i = "i";
+ 4 │     fun g() { print i; }
+   ·                     ┬
+   ·                     ╰── here
+ 5 │     return g;
+   ╰────

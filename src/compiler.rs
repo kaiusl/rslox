@@ -196,11 +196,11 @@ impl<'a> Compiler<'a> {
 
         self.exit_scope();
         let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
-        let fun = ObjFunction {
-            name: InternedString::new(name.item),
+        let fun = ObjFunction::new(
+            InternedString::new(name.item),
+            function_bytecode.bytecode,
             arity,
-            bytecode: function_bytecode.bytecode,
-        };
+        );
         let fun = Value::Object(Object::Function(Rc::new(fun)));
         self.compile_constant(fun, fun_kw.span)?;
 
@@ -739,6 +739,7 @@ impl<'a> Compiler<'a> {
         span: Span,
         can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
+        dbg!(ident, &span, self.chunk.bytecode.code.len());
         let (get, set, span) = match self.resolve_local(ident, span.clone()) {
             Some(idx) => {
                 let idx = idx?;

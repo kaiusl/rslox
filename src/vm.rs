@@ -20,7 +20,6 @@ type Stack<T> = Vec<T>;
 pub struct Vm<'a, OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub src: &'a str,
     pub constants: Vec<Value>,
-    pub spans: HashMap<usize, Span>,
     pub stack: Stack<Value>,
     pub strings: HashSet<InternedString>,
     pub globals: HashMap<InternedString, Value>,
@@ -51,7 +50,6 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         let mut vm = Vm {
             src: "",
             constants: Vec::new(),
-            spans: HashMap::new(),
             frame: CallFrame::new(),
             stack: Stack::new(),
             strings: HashSet::new(),
@@ -91,7 +89,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         }
 
         self.constants = constants;
-        self.spans = bytecode.spans;
+        self.frame.spans = Rc::new(bytecode.spans);
         self.frame.instructions = BytesCursor::new(bytecode.code);
         self.stack.push(Value::Nil);
         self.frame.slots = 0;
@@ -383,8 +381,10 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         // disassembler.print();
 
         let frame = CallFrame {
-            instructions: BytesCursor::new(fun.bytecode.code.clone()),
+            // TODO: avoid cloning instructions
+            instructions: BytesCursor::new(fun.bytecode.clone()),
             slots: self.stack.len() - arg_count as usize - 1,
+            spans: Rc::clone(&fun.spans),
         };
         let prev_frame = std::mem::replace(&mut self.frame, frame);
         self.call_frames.push(prev_frame);
@@ -519,6 +519,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 
     fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> RuntimeError<'a> {
         let span = self
+            .frame
             .spans
             .get(&(self.frame.instructions.offset() - offset))
             .cloned()
@@ -535,6 +536,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
 pub struct CallFrame {
     pub instructions: BytesCursor,
     pub slots: usize,
+    pub spans: Rc<HashMap<usize, Span>>,
 }
 
 impl CallFrame {
@@ -542,6 +544,7 @@ impl CallFrame {
         Self {
             instructions: BytesCursor::new(vec![]),
             slots: 0,
+            spans: Rc::new(HashMap::new()),
         }
     }
 }
