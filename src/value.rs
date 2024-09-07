@@ -60,6 +60,14 @@ impl Value {
         None
     }
 
+    pub fn try_to_function(&self) -> Option<Rc<ObjFunction>> {
+        if let Self::Object(Object::Function(fund)) = self {
+            return Some(Rc::clone(fund));
+        }
+
+        None
+    }
+
     pub fn is_falsey(&self) -> bool {
         matches!(self, Value::Nil | Value::Bool(false))
     }
@@ -92,6 +100,7 @@ pub enum Object {
     String(InternedString),
     Function(Rc<ObjFunction>),
     NativeFn(Rc<NativeFn>),
+    Closure(Rc<ObjClosure>),
 }
 
 impl fmt::Display for Object {
@@ -100,6 +109,7 @@ impl fmt::Display for Object {
             Object::String(s) => write!(f, "{}", **s),
             Object::Function(fun) => write!(f, "{}", fun),
             Object::NativeFn(_) => write!(f, "<native fun>"),
+            Object::Closure(closure) => write!(f, "{}", closure),
         }
     }
 }
@@ -195,3 +205,20 @@ impl fmt::Display for ObjFunction {
 }
 
 pub type NativeFn = fn(u8, &[Value]) -> Value;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjClosure {
+    pub fun: Rc<ObjFunction>,
+}
+
+impl ObjClosure {
+    pub fn new(fun: Rc<ObjFunction>) -> Self {
+        Self { fun }
+    }
+}
+
+impl fmt::Display for ObjClosure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<closure {}>", self.fun.name)
+    }
+}

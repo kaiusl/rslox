@@ -4,7 +4,7 @@ description: "fun foo() {}\nprint foo; // expect: <fn foo>\n\nprint clock; // ex
 input_file: crafting_interpreters_test_files/function/print.lox
 ---
 OUT: 
-<fun foo>
+<closure foo>
 <native fun>
 
 ===

@@ -209,7 +209,14 @@ impl<'a> Compiler<'a> {
             arity,
         );
         let fun = Value::Object(Object::Function(Rc::new(fun)));
-        self.compile_constant(fun, fun_kw.span)?;
+
+        let span = fun_kw.span;
+        let idx = self.add_constant(fun);
+        let Ok(idx) = u8::try_from(idx) else {
+            todo!("Too many constants. Add another op to support more constants.");
+        };
+
+        self.emit(Instruction::Closure(idx), span);
 
         Ok(())
     }

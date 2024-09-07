@@ -126,6 +126,7 @@ pub enum OpCode {
     Jump,
     Loop,
     Call,
+    Closure,
 }
 
 impl OpCode {
@@ -165,6 +166,7 @@ pub enum Instruction {
     Jump(u16),
     Loop(u16),
     Call(u8),
+    Closure(u8),
 }
 
 impl Instruction {
@@ -195,6 +197,7 @@ impl Instruction {
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::Loop(_) => OpCode::Loop,
             Instruction::Call(_) => OpCode::Call,
+            Instruction::Closure(_) => OpCode::Closure,
         }
     }
 
@@ -225,6 +228,10 @@ impl Instruction {
             | Instruction::GetLocal(idx)
             | Instruction::SetLocal(idx)
             | Instruction::Call(idx) => {
+                dst.push(*idx);
+            }
+
+            Instruction::Closure(idx) => {
                 dst.push(*idx);
             }
 
@@ -333,6 +340,14 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::Closure) => match bytes.u8() {
+                Some(idx) => Instruction::Closure(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected function index"),
+                    })
+                }
+            },
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -369,6 +384,8 @@ impl Instruction {
             | Instruction::SetLocal(idx)
             | Instruction::Call(idx) => mem::size_of_val(idx),
 
+            Instruction::Closure(idx) => mem::size_of_val(idx),
+
             Instruction::JumpIfFalse(offset)
             | Instruction::Jump(offset)
             | Instruction::Loop(offset) => mem::size_of_val(offset),
@@ -404,6 +421,7 @@ impl fmt::Display for Instruction {
             Instruction::Jump(offset) => write!(f, "JUMP {}", offset),
             Instruction::Loop(offset) => write!(f, "LOOP {}", offset),
             Instruction::Call(idx) => write!(f, "CALL {}", idx),
+            Instruction::Closure(idx) => write!(f, "CLOSURE {}", idx),
         }
     }
 }

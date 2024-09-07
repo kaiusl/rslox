@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
-use crate::value::{InternedString, NativeFn, ObjFunction, Object, Value};
+use crate::value::{InternedString, NativeFn, ObjClosure, ObjFunction, Object, Value};
 
 use self::error::{RuntimeError, RuntimeErrorKind};
 
@@ -313,6 +313,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     let callee = self.stack[self.stack.len() - arg_count as usize - 1].clone();
                     self.call_value(callee, arg_count)?;
                 }
+                OpCode::Closure => {
+                    let idx = self.frame.instructions.u8().unwrap();
+                    let fun = self.frame.constants.get(idx as usize).unwrap().clone();
+                    let fun = fun.try_to_function().unwrap();
+                    let closure = Value::new_object(Object::Closure(Rc::new(ObjClosure::new(fun))));
+                    self.stack.push(closure);
+                }
             }
         }
 
@@ -321,7 +328,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
         match callee {
-            Value::Object(Object::Function(fun)) => self.call(&fun, arg_count),
+            Value::Object(Object::Closure(fun)) => self.call_closure(&fun, arg_count),
+            //Value::Object(Object::Function(fun)) => self.call_function(&fun, arg_count),
             Value::Object(Object::NativeFn(fun)) => {
                 let result = fun(
                     arg_count,
@@ -356,7 +364,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Value::Number(time)
     }
 
-    fn call(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError> {
+    fn call_closure(&mut self, closure: &Rc<ObjClosure>, arg_count: u8) -> Result<(), RuntimeError> {
+        let fun = &*closure.fun;
+
         if arg_count as usize != fun.arity {
             let kind = RuntimeErrorKind::WrongNumberOfArguments {
                 expected: fun.arity,
@@ -375,12 +385,39 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             slots: self.stack.len() - arg_count as usize - 1,
             spans: Rc::clone(&fun.spans),
             constants: Rc::clone(&fun.constants),
+            closure: Some(Rc::clone(closure)),
         };
         let prev_frame = std::mem::replace(&mut self.frame, frame);
         self.call_frames.push(prev_frame);
 
         Ok(())
     }
+
+    // fn call_function(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError> {
+    //     if arg_count as usize != fun.arity {
+    //         let kind = RuntimeErrorKind::WrongNumberOfArguments {
+    //             expected: fun.arity,
+    //             got: arg_count as usize,
+    //         };
+    //         return Err(self.runtime_error(kind, 2));
+    //     }
+
+    //     // println!("Calling function {}", fun.name);
+    //     // let disassembler = Disassembler::new(fun.bytecode.clone(), self.constants.clone());
+    //     // disassembler.print();
+
+    //     let frame = CallFrame {
+    //         // TODO: avoid cloning instructions
+    //         instructions: BytesCursor::new(fun.bytecode.clone()),
+    //         slots: self.stack.len() - arg_count as usize - 1,
+    //         spans: Rc::clone(&fun.spans),
+    //         constants: Rc::clone(&fun.constants),
+    //     };
+    //     let prev_frame = std::mem::replace(&mut self.frame, frame);
+    //     self.call_frames.push(prev_frame);
+
+    //     Ok(())
+    // }
 
     fn intern_string(&mut self, s: impl Into<String> + AsRef<str>) -> InternedString {
         let s_ref = s.as_ref();
@@ -521,6 +558,7 @@ pub struct CallFrame {
     pub slots: usize,
     pub spans: Rc<HashMap<usize, Span>>,
     pub constants: Rc<[Value]>,
+    pub closure: Option<Rc<ObjClosure>>,
 }
 
 impl CallFrame {
@@ -530,6 +568,7 @@ impl CallFrame {
             slots: 0,
             spans: Rc::new(HashMap::new()),
             constants: Rc::new([]),
+            closure: None,
         }
     }
 }
