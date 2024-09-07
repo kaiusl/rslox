@@ -301,7 +301,11 @@ impl<'a> Lexer<'a> {
                 }
             };
 
-            let span = Span::from_len(self.line, start, token.lexeme().len());
+            let span = if token.is_eof() {
+                Span::from_len(self.line, start.saturating_sub(2), 1)
+            } else {
+                Span::from_len(self.line, start, token.lexeme().len())
+            };
             return Ok(Some(Spanned::new(token, span)));
         }
     }

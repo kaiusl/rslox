@@ -87,7 +87,7 @@ impl<'a> Compiler<'a> {
         loop {
             match self.lexer.peek() {
                 Ok(Some(tok)) if **tok == Token::Eof => break,
-                Ok(None) => unreachable!(), // Token::Eof should be returned before end, thus None can never happen here
+                Ok(None) => break,
                 Ok(Some(_)) => match self.compile_declaration() {
                     Ok(()) => (),
                     Err(err) => self.errors.push(err),
@@ -325,9 +325,7 @@ impl<'a> Compiler<'a> {
                          let _ = self.lexer.next();
                     }
                 },
-                Ok(None) => unreachable!(
-                    "Token::Eof should be returned before end, thus None can never happen here"
-                ),
+                Ok(None) => break,
                 Err(_) => {
                     // ignore following error before synchronization point
                     let _ = self.lexer.next();
@@ -569,8 +567,8 @@ impl<'a> Compiler<'a> {
         predicate: impl Fn(&Token<'a>) -> bool,
         expected_tokens: impl Fn() -> &'static [TokenKind],
     ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
-        match self.lexer.next()? {
-            Some(token) if predicate(&token) => Ok(token),
+        match self.lexer.peek()? {
+            Some(token) if predicate(&token) => Ok(self.lexer.next().unwrap().unwrap()),
 
             // Handle errors
             Some(token) => {
@@ -579,7 +577,7 @@ impl<'a> Compiler<'a> {
                     expected: expected_tokens(),
                     found: token.item.as_kind(),
                 };
-                let err = CompileError::new(kind, token.span);
+                let err = CompileError::new(kind, token.span.clone());
 
                 Err(err.into())
             }

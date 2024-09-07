@@ -15,8 +15,7 @@ pub mod error;
 type Stack<T> = Vec<T>;
 
 #[derive(Debug)]
-pub struct Vm<'a, OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
-    pub src: &'a str,
+pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub constants: Vec<Value>,
     pub stack: Stack<Value>,
     pub strings: HashSet<InternedString>,
@@ -31,13 +30,13 @@ pub struct Vm<'a, OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub disassembler: Disassembler,
 }
 
-impl<'a> Vm<'a> {
+impl Vm {
     pub fn new() -> Self {
         Self::with_output(std::io::stdout(), std::io::stderr())
     }
 }
 
-impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
+impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     const MAX_FRAMES: usize = 64;
     const STACK_MAX: usize = Self::MAX_FRAMES * (u8::MAX as usize);
 
@@ -46,7 +45,6 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
 
         let mut vm = Vm {
-            src: "",
             constants: Vec::new(),
             frame: CallFrame::new(),
             stack: Stack::new(),
@@ -65,7 +63,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         vm
     }
 
-    pub fn compile(&mut self, input: &'a str) -> Result<(), ()>
+    pub fn compile(&mut self, input: &str) -> Result<(), ()>
     where
         for<'b> &'b mut OUTERR: io::Write,
     {
@@ -94,18 +92,18 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         Ok(())
     }
 
-    pub fn run(&mut self)
+    pub fn run(&mut self, input: &str)
     where
         for<'b> &'b mut OUT: io::Write,
         for<'b> &'b mut OUTERR: io::Write,
     {
         if let Err(err) = self.run_core() {
-            let report = miette::Report::new(err.to_owned());
+            let report = miette::Report::new(err.to_owned()).with_source_code(input.to_string());
             writeln!(&mut self.outerr, "{report:?}").unwrap();
         }
     }
 
-    fn run_core(&mut self) -> Result<(), RuntimeError<'a>>
+    fn run_core(&mut self) -> Result<(), RuntimeError>
     where
         for<'b> &'b mut OUT: io::Write,
     {
@@ -344,7 +342,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         Ok(())
     }
 
-    fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError<'a>> {
+    fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
         match callee {
             Value::Object(Object::Function(fun)) => self.call(&fun, arg_count),
             Value::Object(Object::NativeFn(fun)) => {
@@ -381,7 +379,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         Value::Number(time)
     }
 
-    fn call(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError<'a>> {
+    fn call(&mut self, fun: &ObjFunction, arg_count: u8) -> Result<(), RuntimeError> {
         if arg_count as usize != fun.arity {
             let kind = RuntimeErrorKind::WrongNumberOfArguments {
                 expected: fun.arity,
@@ -418,7 +416,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         }
     }
 
-    fn run_binary_add(&mut self) -> Result<(), RuntimeError<'a>> {
+    fn run_binary_add(&mut self) -> Result<(), RuntimeError> {
         let op = Self::add_number;
         let rhs = self.stack.pop();
         let lhs = self.stack.pop();
@@ -456,10 +454,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
     }
 
     #[inline]
-    fn binary_arithmetic_op(
-        &mut self,
-        op: impl Fn(f64, f64) -> f64,
-    ) -> Result<(), RuntimeError<'a>> {
+    fn binary_arithmetic_op(&mut self, op: impl Fn(f64, f64) -> f64) -> Result<(), RuntimeError> {
         let rhs = self.stack.pop();
         let lhs = self.stack.pop();
         match (lhs, rhs) {
@@ -481,7 +476,7 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
     }
 
     #[inline]
-    fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError<'a>> {
+    fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError> {
         let rhs = self.stack.pop();
         let lhs = self.stack.pop();
         match (lhs, rhs) {
@@ -531,18 +526,14 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
         lhs / rhs
     }
 
-    fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> RuntimeError<'a> {
+    fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> RuntimeError {
         let span = self
             .frame
             .spans
             .get(&(self.frame.instructions.offset() - offset))
             .cloned()
             .map(|span| span.into());
-        RuntimeError {
-            kind,
-            span,
-            src: self.src.into(),
-        }
+        RuntimeError { kind, span }
     }
 }
 

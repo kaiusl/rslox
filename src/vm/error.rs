@@ -13,7 +13,7 @@ pub enum InterpretError<'a> {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Runtime(RuntimeError<'a>),
+    Runtime(RuntimeError),
 }
 
 impl<'a> From<StaticError<'a>> for InterpretError<'a> {
@@ -22,26 +22,23 @@ impl<'a> From<StaticError<'a>> for InterpretError<'a> {
     }
 }
 
-impl<'a> From<RuntimeError<'a>> for InterpretError<'a> {
-    fn from(err: RuntimeError<'a>) -> Self {
+impl<'a> From<RuntimeError> for InterpretError<'a> {
+    fn from(err: RuntimeError) -> Self {
         Self::Runtime(err)
     }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic, Clone)]
 #[error("{kind}")]
-pub struct RuntimeError<'a> {
-    #[source_code]
-    pub src: Cow<'a, str>,
+pub struct RuntimeError {
     #[label("here")]
     pub span: Option<miette::SourceSpan>,
     pub kind: RuntimeErrorKind,
 }
 
-impl RuntimeError<'_> {
-    pub fn to_owned(self) -> RuntimeError<'static> {
+impl RuntimeError {
+    pub fn to_owned(self) -> RuntimeError {
         RuntimeError {
-            src: Cow::Owned(self.src.into_owned()),
             span: self.span,
             kind: self.kind,
         }

@@ -1,3 +1,4 @@
+use std::io::{BufRead, Read, Write};
 use std::path::PathBuf;
 
 use miette::Result;
@@ -24,10 +25,27 @@ fn main() {
             }
             let mut vm = Vm::new();
             vm.compile(&input).unwrap();
-            vm.run();
+            vm.run(&input);
         }
         None => {
-            todo!("Implement REPL")
+            let mut vm = Vm::new();
+            let mut input = String::new();
+            const PROMPT: &str = ">> ";
+            loop {
+                print!("{}", PROMPT);
+                std::io::stdout().flush();
+                std::io::stdin().read_line(&mut input);
+
+                //let input = std::str::from_utf8(&buffer).unwrap();
+                println!("input: {}", input.trim_end_matches('\n'));
+                if input == "@exit" {
+                    break;
+                }
+                vm.compile(&input);
+                vm.run(&input);
+
+                input.clear();
+            }
         }
     }
 }
