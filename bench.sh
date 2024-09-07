@@ -1,21 +1,11 @@
 cargo build --release
 
-echo "equality"
-for v in {1..3}
-do
-./target/release/rslox -f ./crafting_interpreters_test_files/benchmark.ignore/equality.lox
-done
-
-echo ""
-echo "fib"
-for v in {1..3}
-do
-./target/release/rslox -f ./crafting_interpreters_test_files/benchmark.ignore/fib.lox
-done
-
-echo ""
-echo "string_equality"
-for v in {1..3}
-do
-./target/release/rslox -f ./crafting_interpreters_test_files/benchmark.ignore/string_equality.lox
+for path in "equality" "fib" "string_equality"
+do 
+    echo ""
+    echo $path
+    for ((i=0; i<${1:-1}; i++))
+    do
+        ./target/release/rslox -f ./crafting_interpreters_test_files/benchmark.ignore/$path.lox
+    done
 done
