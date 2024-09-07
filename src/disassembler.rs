@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::bytecode::{ByteCode, BytesCursor, Instruction};
 use crate::common::Span;
@@ -8,17 +9,21 @@ use crate::value::Value;
 #[derive(Debug, Clone)]
 pub struct Disassembler {
     pub constants: Vec<Value>,
-    pub spans: HashMap<usize, Span>,
+    pub spans: Rc<HashMap<usize, Span>>,
     pub cursor: BytesCursor,
     pub prev_line: Option<usize>,
 }
 
 impl Disassembler {
-    pub fn new(bytecode: ByteCode, constants: Vec<Value>) -> Disassembler {
+    pub fn new(
+        code: Rc<[u8]>,
+        spans: Rc<HashMap<usize, Span>>,
+        constants: Vec<Value>,
+    ) -> Disassembler {
         Disassembler {
             constants,
-            spans: bytecode.spans,
-            cursor: BytesCursor::new(bytecode.code.into()),
+            spans,
+            cursor: BytesCursor::new(code),
             prev_line: None,
         }
     }

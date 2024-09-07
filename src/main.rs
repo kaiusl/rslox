@@ -1,37 +1,42 @@
+use std::path::PathBuf;
+
 use miette::Result;
 
 use rslox::compiler::Compiler;
 use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
+use clap::Parser;
+
 fn main() {
-    let input = r#"fun fib(n) {
-  if (n < 2) return n;
-  return fib(n - 2) + fib(n - 1);
+    let args = Args::parse();
+    match args.file {
+        Some(file) => {
+            let input = std::fs::read_to_string(file).unwrap();
+            #[cfg(feature = "debug_disassemble")]
+            {
+                let compiler = Compiler::from_str(&input);
+                let (bytecode, constants) = compiler.compile().unwrap();
+                println!("\n\n<fn main>");
+                let disassembler =
+                    Disassembler::new(bytecode.code.into(), bytecode.spans.into(), constants);
+                disassembler.print();
+            }
+            let mut vm = Vm::new();
+            vm.compile(&input).unwrap();
+            vm.run();
+        }
+        None => {
+            todo!("Implement REPL")
+        }
+    }
 }
 
-var start = clock();
-print fib(35) == 9227465;
-print clock() - start;
-
-"#;
-
-    let compiler = Compiler::from_str(input);
-    let (bytecode, constants) = compiler.compile().unwrap();
-    let disassembler = Disassembler::new(bytecode, constants);
-    disassembler.print();
-
-    #[cfg(feature = "debug_trace")]
-    {
-        println!("DEBUG_TRACE")
-    }
-
-    let mut out = Vec::<u8>::new();
-    let mut outerr = Vec::<u8>::new();
-    let mut vm = Vm::with_output(&mut out, &mut outerr);
-    vm.compile(input).unwrap();
-    vm.run();
-
-    println!("{}", String::from_utf8(out).unwrap());
-    println!("{}", String::from_utf8(outerr).unwrap());
+/// Simple program to greet a person
+#[derive(clap::Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long)]
+    file: Option<PathBuf>,
 }

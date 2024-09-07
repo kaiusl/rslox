@@ -4,6 +4,7 @@ use std::u16;
 
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
+use crate::disassembler::Disassembler;
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
 use crate::value::{InternedString, ObjFunction, Object, Value};
 
@@ -196,6 +197,7 @@ impl<'a> Compiler<'a> {
 
         self.exit_scope();
         let function_bytecode = std::mem::replace(&mut self.chunk, prev_chunk);
+
         let fun = ObjFunction::new(
             InternedString::new(name.item),
             function_bytecode.bytecode,

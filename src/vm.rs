@@ -2,15 +2,13 @@ use core::panic;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
-use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
-use crate::bytecode::{ByteCode, BytesCursor, OpCode};
+use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
-use crate::disassembler::{self, Disassembler};
 use crate::value::{InternedString, NativeFn, ObjFunction, Object, Value};
 
-use self::error::{InterpretError, RuntimeError, RuntimeErrorKind};
+use self::error::{RuntimeError, RuntimeErrorKind};
 
 pub mod error;
 
@@ -139,6 +137,9 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                 }
                 OpCode::Constant => {
                     let index = self.frame.instructions.u8().unwrap();
+                    #[cfg(feature = "debug_disassemble")]
+                    let disassembler_constants = self.constants.clone();
+
                     let value = &mut self.constants[index as usize];
 
                     // Push constant to strings table
@@ -154,6 +155,20 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
                             _ => {}
                         }
                     }
+
+                    #[cfg(feature = "debug_disassemble")]
+                    {
+                        if let Value::Object(Object::Function(fun)) = &value {
+                            println!("\n\n<fn {}>", &fun.name);
+                            let disassembler = Disassembler::new(
+                                fun.bytecode.clone(),
+                                fun.spans.clone(),
+                                disassembler_constants,
+                            );
+                            disassembler.print();
+                        }
+                    }
+
                     self.stack.push(value.clone());
                 }
                 OpCode::DefineGlobal => {
