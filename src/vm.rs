@@ -69,9 +69,8 @@ impl<'a, OUT, OUTERR> Vm<'a, OUT, OUTERR> {
     where
         for<'b> &'b mut OUTERR: io::Write,
     {
-        self.src = input;
-
-        let compiler = crate::compiler::Compiler::from_str(input);
+        let compiler =
+            crate::compiler::Compiler::from_str(input, std::mem::take(&mut self.constants));
         let (bytecode, constants) = match compiler.compile() {
             Ok(bytecode) => bytecode,
             Err(err) => {

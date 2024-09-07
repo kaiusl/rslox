@@ -56,7 +56,7 @@ impl CompileUnit {
 }
 
 impl<'a> Compiler<'a> {
-    pub fn from_str(source: &'a str) -> Self {
+    pub fn from_str(source: &'a str, constants: Vec<Value>) -> Self {
         //let mut locals = Vec::with_capacity(1);
         // I don't think we need it atm, we'll add it later if we do need it
         // locals[0] is for VM's internal use
@@ -74,7 +74,7 @@ impl<'a> Compiler<'a> {
                 FunType::Script,
                 Spanned::new(String::from("main"), Span::from_len(0, 0, 0)),
             ),
-            constants: Vec::new(),
+            constants,
         }
     }
 
