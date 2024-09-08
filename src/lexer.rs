@@ -513,6 +513,22 @@ impl<'a> Token<'a> {
     pub fn is_comma(&self) -> bool {
         matches!(self, Self::Comma)
     }
+
+    /// Returns `true` if the token is [`Lt`].
+    ///
+    /// [`Lt`]: Token::Lt
+    #[must_use]
+    pub fn is_lt(&self) -> bool {
+        matches!(self, Self::Lt)
+    }
+
+    /// Returns `true` if the token is [`Dot`].
+    ///
+    /// [`Dot`]: Token::Dot
+    #[must_use]
+    pub fn is_dot(&self) -> bool {
+        matches!(self, Self::Dot)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

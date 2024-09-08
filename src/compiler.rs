@@ -36,11 +36,12 @@ pub struct Compiler<'a> {
 
 pub struct ClassCompileUnit {
     pub parent: Option<Box<ClassCompileUnit>>,
+    pub has_superclass: bool,
 }
 
 impl ClassCompileUnit {
     pub fn new(parent: Option<Box<ClassCompileUnit>>) -> Self {
-        Self { parent }
+        Self { parent, has_superclass: false }
     }
 }
 
@@ -173,11 +174,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_class_decl(&mut self, class_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
-        let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
-        let span = ident.span.clone();
-        let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
-        self.declare_variable(ident.clone())?;
+        let class_ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+        let class_ident = class_ident.map(|ident| ident.clone().try_into_ident().unwrap());
+        let span = class_ident.span.clone();
+        let const_idx = self.compile_ident_constant(class_ident.map(|ident| ident.to_string()))?;
+        self.declare_variable(class_ident.clone())?;
 
         self.emit(Instruction::Class(const_idx), span.clone());
         self.compile_define_variable(Spanned::new(const_idx, span.clone()));
@@ -186,7 +187,35 @@ impl<'a> Compiler<'a> {
             self.current_class.take().map(Box::new),
         ));
 
-        self.compile_named_variable(&ident.item, span.clone(), false)?; // push class to the stack, so that methods can find it
+        if let Some(lt) = self.lexer.next_if(Token::is_lt)? {
+            let super_ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+            let super_ident = super_ident.map(|ident| ident.clone().try_into_ident().unwrap());
+            self.compile_variable(&super_ident, super_ident.span.clone(), false)?;
+
+            if super_ident == class_ident {
+                let kind = CompileErrorKind::Msg("a class can't inherit from itself".into());
+                let err = CompileError::new(kind, super_ident.span);
+                return Err(err.into());
+            }
+            self.current_class.as_mut().unwrap().has_superclass = true;
+
+            self.enter_scope();
+            let local = Local {
+                ident: Spanned::new("super".into(), Span::new(0, 0, 0)),
+                depth: self.chunk.scope_depth,
+                init: false,
+                is_captured: false,
+            };
+            self.chunk.locals.push(local);
+            self.compile_define_variable(Spanned::new(0, Span::new(0, 0, 0)));
+
+
+
+            self.compile_named_variable(&class_ident.item, span.clone(), false)?;
+            self.emit(Instruction::Inherit, super_ident.span);
+        }
+
+        self.compile_named_variable(&class_ident.item, span.clone(), false)?; // push class to the stack, so that methods can find it
 
         let _lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
 
@@ -199,6 +228,10 @@ impl<'a> Compiler<'a> {
 
         let _lbrace = self.consume(Token::is_rbrace, || &[TokenKind::RBrace])?;
         self.emit(Instruction::Pop, span.clone()); // pop class
+
+        if self.current_class.as_mut().unwrap().has_superclass {
+            self.exit_scope();
+        }
 
         self.current_class = self
             .current_class
@@ -862,8 +895,34 @@ impl<'a> Compiler<'a> {
                 .map(|_| ()),
             Token::Ident(ident) => self.compile_variable(ident, prefix.span, can_assign),
             Token::Keyword(Keyword::This) => self.compile_this(prefix),
+            Token::Keyword(Keyword::Super) => self.compile_super(prefix),
             _ => unreachable!("Invalid prefix operator."),
         }
+    }
+
+    fn compile_super(&mut self, super_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        if self.current_class.is_none() {
+            let kind = CompileErrorKind::Msg("can't use 'super' outside of a class".into());
+            let err = CompileError::new(kind, super_kw.span);
+            return Err(err.into());
+        } else if !self.current_class.as_ref().unwrap().has_superclass {
+            let kind = CompileErrorKind::Msg("can't use 'super' in a class with no superclass".into());
+            let err = CompileError::new(kind, super_kw.span);
+            return Err(err.into());
+        }
+
+
+        let dot = self.consume(Token::is_dot, || &[TokenKind::Dot])?;
+        let name = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
+        let name = name.map(|name| name.clone().try_into_ident().unwrap());
+        let name_const_idx = self.compile_ident_constant(name.map(|name| name.to_string()))?;
+
+        self.compile_named_variable("this", Span::new(0, 0, 0), false)?;
+        self.compile_named_variable("super", Span::new(0,0,0), false)?;
+
+        self.emit(Instruction::GetSuper(name_const_idx), super_kw.span);
+
+        Ok(())
     }
 
     fn compile_this(&mut self, this_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
@@ -1018,7 +1077,7 @@ impl<'a> Compiler<'a> {
                 | Token::Bang
                 | Token::String { .. }
                 | Token::Ident(_)
-                | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False | Keyword::This)
+                | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False | Keyword::This | Keyword::Super)
         )
     }
 
@@ -1034,26 +1093,10 @@ impl<'a> Compiler<'a> {
             TokenKind::Keyword(Keyword::True),
             TokenKind::Keyword(Keyword::False),
             TokenKind::Keyword(Keyword::This),
+            TokenKind::Keyword(Keyword::Super)
         ]
     }
 
-    const fn any_token() -> &'static [Token<'static>] {
-        &[
-            Token::Number {
-                value: 0.0,
-                lexeme: "0.0",
-            },
-            Token::LParen,
-            Token::Minus,
-            Token::Bang,
-            Token::Plus,
-            Token::Slash,
-            Token::Star,
-            Token::Keyword(Keyword::Nil),
-            Token::Keyword(Keyword::True),
-            Token::Keyword(Keyword::False),
-        ]
-    }
 
     fn compile_infix(
         &mut self,

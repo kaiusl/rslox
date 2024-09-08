@@ -500,6 +500,50 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     let arg_count = self.frame.instructions.u8().unwrap();
                     self.invoke(name, arg_count)?;
                 }
+
+                OpCode::Inherit => {
+                    let Some(super_class) = self
+                        .stack
+                        .get(self.stack.len() - 2)
+                        .expect("expected class on stack, it's a bug in VM or compiler")
+                        .try_to_class() else {
+                            let kind = RuntimeErrorKind::Msg("superclass must be a class".into());
+                            return Err(self.runtime_error(kind, 1));
+                        };
+                    let class = self
+                        .stack
+                        .last()
+                        .expect("expected class on stack, it's a bug in VM or compiler")
+                        .try_to_class()
+                        .expect("expected class on stack, it's a bug in VM or compiler");
+                    class.borrow_mut().methods.extend(
+                        super_class
+                            .borrow()
+                            .methods
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone())),
+                    );
+                    self.stack.pop();
+                }
+
+                OpCode::GetSuper => {
+                    let method_name_idx = self.frame.instructions.u8().unwrap();
+                    let method_name = self
+                        .frame
+                        .constants
+                        .get(method_name_idx as usize)
+                        .expect("tried to get constant at invalid index, it's a bug in VM or compiler")
+                        .try_to_string()
+                        .expect("tried to get method name from non string, it's a bug in VM or compiler");
+                    let superclass = self
+                        .stack
+                        .pop()
+                        .expect("expected class on stack, it's a bug in VM or compiler")
+                        .try_to_class()
+                        .expect("expected class on stack, it's a bug in VM or compiler");
+                    let superclass = superclass.borrow();
+                    self.bind_method(&superclass, method_name)?;
+                }
             }
         }
 

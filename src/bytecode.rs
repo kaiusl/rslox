@@ -140,6 +140,8 @@ pub enum OpCode {
     Class,
     Method,
     Invoke,
+    Inherit,
+    GetSuper,
 }
 
 impl OpCode {
@@ -188,6 +190,8 @@ pub enum Instruction {
     Class(u8),
     Method(u8),
     Invoke(u8, u8),
+    Inherit,
+    GetSuper(u8),
 }
 
 impl Instruction {
@@ -227,6 +231,8 @@ impl Instruction {
             Instruction::Class(_) => OpCode::Class,
             Instruction::Method(_) => OpCode::Method,
             Instruction::Invoke(_, _) => OpCode::Invoke,
+            Instruction::Inherit => OpCode::Inherit,
+            Instruction::GetSuper(_) => OpCode::GetSuper,
         }
     }
 
@@ -249,7 +255,8 @@ impl Instruction {
             | Instruction::Lt
             | Instruction::Print
             | Instruction::Pop
-            | Instruction::CloseUpvalue => {}
+            | Instruction::CloseUpvalue
+            | Instruction::Inherit => {}
 
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
@@ -263,7 +270,8 @@ impl Instruction {
             | Instruction::GetProperty(idx)
             | Instruction::SetProperty(idx)
             | Instruction::Class(idx)
-            | Instruction::Method(idx) => {
+            | Instruction::Method(idx)
+            | Instruction::GetSuper(idx) => {
                 dst.push(*idx);
             }
 
@@ -459,7 +467,16 @@ impl Instruction {
                 };
                 Instruction::Invoke(idx, arg_count)
             }
+            Some(OpCode::GetSuper) => match bytes.u8() {
+                Some(idx) => Instruction::GetSuper(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected method index"),
+                    })
+                }
+            },
             Some(OpCode::CloseUpvalue) => Instruction::CloseUpvalue,
+            Some(OpCode::Inherit) => Instruction::Inherit,
             None => {
                 return Err(DisassemblerError {
                     message: Cow::Borrowed("Unknown opcode"),
@@ -487,7 +504,8 @@ impl Instruction {
             | Instruction::Lt
             | Instruction::Print
             | Instruction::Pop
-            | Instruction::CloseUpvalue => 0,
+            | Instruction::CloseUpvalue
+            | Instruction::Inherit => 0,
 
             Instruction::Constant(idx)
             | Instruction::DefineGlobal(idx)
@@ -501,7 +519,8 @@ impl Instruction {
             | Instruction::Class(idx)
             | Instruction::GetProperty(idx)
             | Instruction::SetProperty(idx)
-            | Instruction::Method(idx) => mem::size_of_val(idx),
+            | Instruction::Method(idx)
+            | Instruction::GetSuper(idx) => mem::size_of_val(idx),
 
             Instruction::Closure(idx) => mem::size_of_val(idx),
 
@@ -553,6 +572,8 @@ impl fmt::Display for Instruction {
             Instruction::SetProperty(idx) => write!(f, "SET_PROPERTY {}", idx),
             Instruction::Method(idx) => write!(f, "METHOD {}", idx),
             Instruction::Invoke(idx, arg_count) => write!(f, "INVOKE {} {}", idx, arg_count),
+            Instruction::Inherit => write!(f, "INHERIT"),
+            Instruction::GetSuper(idx) => write!(f, "GET_SUPER {}", idx),
         }
     }
 }
