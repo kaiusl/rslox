@@ -487,10 +487,57 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     let method = self.stack.pop().unwrap().try_to_closure().unwrap();
                     class.borrow_mut().methods.insert(name, method);
                 }
+
+                OpCode::Invoke => {
+                    let name_idx = self.frame.instructions.u8().unwrap();
+                    let name = self
+                        .frame
+                        .constants
+                        .get(name_idx as usize)
+                        .expect("tried to get constant at invalid index, it's a bug in VM or compiler")
+                        .try_to_string()
+                        .expect("tried to invoke method name from non string, it's a bug in VM or compiler");
+                    let arg_count = self.frame.instructions.u8().unwrap();
+                    self.invoke(name, arg_count)?;
+                }
             }
         }
 
         Ok(())
+    }
+
+    fn invoke(&mut self, name: InternedString, arg_count: u8) -> Result<(), RuntimeError> {
+        let Some(instance) =
+            self.stack[self.stack.len() - arg_count as usize - 1].try_to_instance()
+        else {
+            let kind = RuntimeErrorKind::Msg("only instances have methods".into());
+            return Err(self.runtime_error(kind, 1));
+        };
+
+        let instance = instance.borrow();
+
+        if let Some(field) = instance.fields.get(&name) {
+            let idx = self.stack.len() - arg_count as usize - 1;
+            self.stack[idx] = field.clone();
+            return self.call_value(field.clone(), arg_count);
+        }
+
+        let class = instance.class.borrow();
+        self.invoke_from_class(&class, name, arg_count)
+    }
+
+    fn invoke_from_class(
+        &mut self,
+        class: &ObjClass,
+        name: InternedString,
+        arg_count: u8,
+    ) -> Result<(), RuntimeError> {
+        let Some(method) = class.methods.get(&name) else {
+            let kind = RuntimeErrorKind::UndefinedProperty { name };
+            return Err(self.runtime_error(kind, 1));
+        };
+
+        self.call_closure(method, arg_count)
     }
 
     fn bind_method(&mut self, class: &ObjClass, name: InternedString) -> Result<(), RuntimeError> {

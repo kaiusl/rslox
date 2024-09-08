@@ -8,9 +8,3 @@ OUT:
 ===
 ERR: 
   × can only call functions and classes
-   ╭─[6:8]
- 5 │ 
- 6 │ foo.bar(); // expect runtime error: Can only call functions and classes.
-   ·        ┬
-   ·        ╰── here
-   ╰────

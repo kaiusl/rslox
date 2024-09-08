@@ -1093,6 +1093,9 @@ impl<'a> Compiler<'a> {
             let eq = maybe_eq.unwrap();
             self.compile_expr()?;
             self.emit(Instruction::SetProperty(name_const_idx), ident.span);
+        } else if let Some(lparen) = self.lexer.next_if(Token::is_lparen)? {
+            let arg_count = self.compile_arg_list()?;
+            self.emit(Instruction::Invoke(name_const_idx, arg_count), lparen.span);
         } else {
             self.emit(Instruction::GetProperty(name_const_idx), ident.span);
         }

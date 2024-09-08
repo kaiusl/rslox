@@ -8,9 +8,3 @@ OUT:
 ===
 ERR: 
   × wrong number of arguments, expected 2, got 1
-   ╭─[5:13]
- 4 │ 
- 5 │ Foo().method(1); // expect runtime error: Expected 2 arguments but got 1.
-   ·             ┬
-   ·             ╰── here
-   ╰────

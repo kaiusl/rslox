@@ -139,6 +139,7 @@ pub enum OpCode {
     CloseUpvalue,
     Class,
     Method,
+    Invoke,
 }
 
 impl OpCode {
@@ -186,6 +187,7 @@ pub enum Instruction {
     CloseUpvalue,
     Class(u8),
     Method(u8),
+    Invoke(u8, u8),
 }
 
 impl Instruction {
@@ -224,6 +226,7 @@ impl Instruction {
             Instruction::CloseUpvalue => OpCode::CloseUpvalue,
             Instruction::Class(_) => OpCode::Class,
             Instruction::Method(_) => OpCode::Method,
+            Instruction::Invoke(_, _) => OpCode::Invoke,
         }
     }
 
@@ -272,6 +275,11 @@ impl Instruction {
             | Instruction::Jump(offset)
             | Instruction::Loop(offset) => {
                 dst.extend_from_slice(&offset.to_le_bytes());
+            }
+
+            Instruction::Invoke(idx, arg_count) => {
+                dst.push(*idx);
+                dst.push(*arg_count);
             }
         }
     }
@@ -432,6 +440,25 @@ impl Instruction {
                     })
                 }
             },
+            Some(OpCode::Invoke) => {
+                let idx = match bytes.u8() {
+                    Some(idx) => idx,
+                    None => {
+                        return Err(DisassemblerError {
+                            message: Cow::Borrowed("Expected method index"),
+                        })
+                    }
+                };
+                let arg_count = match bytes.u8() {
+                    Some(arg_count) => arg_count,
+                    None => {
+                        return Err(DisassemblerError {
+                            message: Cow::Borrowed("Expected argument count"),
+                        })
+                    }
+                };
+                Instruction::Invoke(idx, arg_count)
+            }
             Some(OpCode::CloseUpvalue) => Instruction::CloseUpvalue,
             None => {
                 return Err(DisassemblerError {
@@ -481,6 +508,10 @@ impl Instruction {
             Instruction::JumpIfFalse(offset)
             | Instruction::Jump(offset)
             | Instruction::Loop(offset) => mem::size_of_val(offset),
+
+            Instruction::Invoke(idx, arg_count) => {
+                mem::size_of_val(idx) + mem::size_of_val(arg_count)
+            }
         }
     }
 }
@@ -521,6 +552,7 @@ impl fmt::Display for Instruction {
             Instruction::GetProperty(idx) => write!(f, "GET_PROPERTY {}", idx),
             Instruction::SetProperty(idx) => write!(f, "SET_PROPERTY {}", idx),
             Instruction::Method(idx) => write!(f, "METHOD {}", idx),
+            Instruction::Invoke(idx, arg_count) => write!(f, "INVOKE {} {}", idx, arg_count),
         }
     }
 }
