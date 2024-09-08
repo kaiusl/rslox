@@ -57,7 +57,11 @@ impl BytesCursor {
         self.offset -= count
     }
 
-    pub fn u8(&mut self) -> Option<u8> {
+    pub fn u8(&mut self) -> u8 {
+        self.try_u8().expect("expected an u8 from bytes cursor")
+    }
+
+    pub fn try_u8(&mut self) -> Option<u8> {
         let result = self.instructions.get(self.offset).copied();
         self.offset += 1;
         result
@@ -67,7 +71,11 @@ impl BytesCursor {
         self.instructions.get(self.offset).copied()
     }
 
-    pub fn u16(&mut self) -> Option<u16> {
+    pub fn u16(&mut self) -> u16 {
+        self.try_u16().expect("expected an u16 from bytes cursor")
+    }
+
+    pub fn try_u16(&mut self) -> Option<u16> {
         const LEN: usize = std::mem::size_of::<u16>();
         self.array::<LEN>().map(u16::from_le_bytes)
     }
@@ -292,9 +300,9 @@ impl Instruction {
     }
 
     pub fn from_bytes(bytes: &mut BytesCursor) -> Result<Self, DisassemblerError> {
-        let instr = match bytes.u8().and_then(OpCode::try_from_u8) {
+        let instr = match bytes.try_u8().and_then(OpCode::try_from_u8) {
             Some(OpCode::Return) => Instruction::Return,
-            Some(OpCode::Constant) => match bytes.u8() {
+            Some(OpCode::Constant) => match bytes.try_u8() {
                 Some(idx) => Instruction::Constant(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -316,7 +324,7 @@ impl Instruction {
             Some(OpCode::Lt) => Instruction::Lt,
             Some(OpCode::Print) => Instruction::Print,
             Some(OpCode::Pop) => Instruction::Pop,
-            Some(OpCode::DefineGlobal) => match bytes.u8() {
+            Some(OpCode::DefineGlobal) => match bytes.try_u8() {
                 Some(idx) => Instruction::DefineGlobal(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -324,7 +332,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::GetGlobal) => match bytes.u8() {
+            Some(OpCode::GetGlobal) => match bytes.try_u8() {
                 Some(idx) => Instruction::GetGlobal(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -332,7 +340,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::SetGlobal) => match bytes.u8() {
+            Some(OpCode::SetGlobal) => match bytes.try_u8() {
                 Some(idx) => Instruction::SetGlobal(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -340,7 +348,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::GetLocal) => match bytes.u8() {
+            Some(OpCode::GetLocal) => match bytes.try_u8() {
                 Some(idx) => Instruction::GetLocal(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -348,7 +356,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::SetLocal) => match bytes.u8() {
+            Some(OpCode::SetLocal) => match bytes.try_u8() {
                 Some(idx) => Instruction::SetLocal(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -356,7 +364,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::GetUpvalue) => match bytes.u8() {
+            Some(OpCode::GetUpvalue) => match bytes.try_u8() {
                 Some(idx) => Instruction::GetUpvalue(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -365,7 +373,7 @@ impl Instruction {
                 }
             },
 
-            Some(OpCode::SetUpvalue) => match bytes.u8() {
+            Some(OpCode::SetUpvalue) => match bytes.try_u8() {
                 Some(idx) => Instruction::SetUpvalue(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -373,7 +381,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::JumpIfFalse) => match bytes.u16() {
+            Some(OpCode::JumpIfFalse) => match bytes.try_u16() {
                 Some(offset) => Instruction::JumpIfFalse(offset),
                 None => {
                     return Err(DisassemblerError {
@@ -381,7 +389,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::Jump) => match bytes.u16() {
+            Some(OpCode::Jump) => match bytes.try_u16() {
                 Some(offset) => Instruction::Jump(offset),
                 None => {
                     return Err(DisassemblerError {
@@ -389,7 +397,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::Loop) => match bytes.u16() {
+            Some(OpCode::Loop) => match bytes.try_u16() {
                 Some(offset) => Instruction::Loop(offset),
                 None => {
                     return Err(DisassemblerError {
@@ -397,7 +405,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::Call) => match bytes.u8() {
+            Some(OpCode::Call) => match bytes.try_u8() {
                 Some(num_args) => Instruction::Call(num_args),
                 None => {
                     return Err(DisassemblerError {
@@ -405,7 +413,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::Closure) => match bytes.u8() {
+            Some(OpCode::Closure) => match bytes.try_u8() {
                 Some(idx) => Instruction::Closure(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -413,7 +421,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::Class) => match bytes.u8() {
+            Some(OpCode::Class) => match bytes.try_u8() {
                 Some(idx) => Instruction::Class(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -422,7 +430,7 @@ impl Instruction {
                 }
             },
 
-            Some(OpCode::GetProperty) => match bytes.u8() {
+            Some(OpCode::GetProperty) => match bytes.try_u8() {
                 Some(idx) => Instruction::GetProperty(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -430,7 +438,7 @@ impl Instruction {
                     })
                 }
             },
-            Some(OpCode::SetProperty) => match bytes.u8() {
+            Some(OpCode::SetProperty) => match bytes.try_u8() {
                 Some(idx) => Instruction::SetProperty(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -439,7 +447,7 @@ impl Instruction {
                 }
             },
 
-            Some(OpCode::Method) => match bytes.u8() {
+            Some(OpCode::Method) => match bytes.try_u8() {
                 Some(idx) => Instruction::Method(idx),
                 None => {
                     return Err(DisassemblerError {
@@ -448,7 +456,7 @@ impl Instruction {
                 }
             },
             Some(OpCode::Invoke) => {
-                let idx = match bytes.u8() {
+                let idx = match bytes.try_u8() {
                     Some(idx) => idx,
                     None => {
                         return Err(DisassemblerError {
@@ -456,7 +464,7 @@ impl Instruction {
                         })
                     }
                 };
-                let arg_count = match bytes.u8() {
+                let arg_count = match bytes.try_u8() {
                     Some(arg_count) => arg_count,
                     None => {
                         return Err(DisassemblerError {
@@ -466,7 +474,7 @@ impl Instruction {
                 };
                 Instruction::Invoke(idx, arg_count)
             }
-            Some(OpCode::GetSuper) => match bytes.u8() {
+            Some(OpCode::GetSuper) => match bytes.try_u8() {
                 Some(idx) => Instruction::GetSuper(idx),
                 None => {
                     return Err(DisassemblerError {

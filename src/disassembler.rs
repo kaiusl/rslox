@@ -60,8 +60,8 @@ impl Disassembler {
                 if let Instruction::Closure(idx) = op {
                     let fun = &self.constants[idx as usize].try_to_function().unwrap();
                     for _ in 0..fun.upvalues_count {
-                        let is_local = self.cursor.u8().unwrap();
-                        let index = self.cursor.u8().unwrap();
+                        let is_local = self.cursor.try_u8().unwrap();
+                        let index = self.cursor.try_u8().unwrap();
                         print!(
                             "\n{line:04}      |    {} {}",
                             if is_local == 1 { "local" } else { "upvalue" },

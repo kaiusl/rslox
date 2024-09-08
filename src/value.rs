@@ -22,6 +22,22 @@ impl Value {
         Self::Object(obj)
     }
 
+    pub fn new_class(cls: ObjClass) -> Self {
+        Self::new_object(Object::Class(Rc::new(RefCell::new(cls))))
+    }
+
+    pub fn new_instance(inst: ObjInstance) -> Self {
+        Self::new_object(Object::Instance(Rc::new(RefCell::new(inst))))
+    }
+
+    pub fn new_closure(closure: ObjClosure) -> Self {
+        Self::new_object(Object::Closure(Rc::new(closure)))
+    }
+
+    pub fn new_bound_method(bm: ObjBoundMethod) -> Self {
+        Self::new_object(Object::BoundMethod(Rc::new(bm)))
+    }
+
     pub fn try_into_number(self) -> Result<f64, Self> {
         if let Self::Number(v) = self {
             Ok(v)
@@ -292,14 +308,14 @@ impl ObjClass {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjInstance {
     pub class: Rc<RefCell<ObjClass>>,
-    pub fields: HashMap<InternedString, Value>,
+    pub properties: HashMap<InternedString, Value>,
 }
 
 impl ObjInstance {
     pub fn new(class: Rc<RefCell<ObjClass>>) -> Self {
         Self {
             class,
-            fields: HashMap::new(),
+            properties: HashMap::new(),
         }
     }
 }

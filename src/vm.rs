@@ -1,5 +1,5 @@
 use core::panic;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, Write};
@@ -22,7 +22,7 @@ type Stack<T> = Vec<T>;
 #[derive(Debug)]
 pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub stack: Stack<Value>,
-    pub strings: HashSet<InternedString>,
+    pub strings: StringInterner,
     pub globals: HashMap<InternedString, Value>,
     pub call_frames: Vec<CallFrame>,
     pub frame: CallFrame,
@@ -52,7 +52,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let mut vm = Vm {
             frame: CallFrame::new(),
             stack: Stack::new(),
-            strings: HashSet::new(),
+            strings: StringInterner::new(),
             globals: HashMap::new(),
             call_frames: Vec::new(),
             open_upvalues: BTreeMap::new(),
@@ -80,7 +80,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             Ok(bytecode) => bytecode,
             Err(err) => {
                 let report = miette::Report::new(err.to_owned());
-                writeln!(&mut self.outerr, "{report:?}").unwrap();
+                match writeln!(&mut self.outerr, "{report:?}") {
+                    Ok(_) => (),
+                    Err(_) => {
+                        eprintln!("failed to report errors from vm, aborting ...");
+                        std::process::abort();
+                    }
+                }
                 return Err(());
             }
         };
@@ -106,7 +112,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     {
         if let Err(err) = self.run_core() {
             let report = miette::Report::new(err.to_owned()).with_source_code(input.to_string());
-            writeln!(&mut self.outerr, "{report:?}").unwrap();
+            match writeln!(&mut self.outerr, "{report:?}") {
+                Ok(_) => (),
+                Err(_) => {
+                    eprintln!("failed to report errors from vm, aborting ...");
+                    std::process::abort();
+                }
+            }
         }
     }
 
@@ -114,7 +126,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     where
         for<'b> &'b mut OUT: io::Write,
     {
-        while let Some(op) = self.frame.instructions.u8().map(OpCode::from_u8) {
+        while let Some(op) = self.frame.instructions.try_u8().map(OpCode::from_u8) {
             if self.stack.len() > Self::STACK_MAX {
                 let kind = RuntimeErrorKind::Msg("stack overflow".into());
                 return Err(self.runtime_error(kind, 1));
@@ -189,57 +201,44 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_return(&mut self) {
-        let result = self.stack.pop().unwrap();
+        let result = self.stack.pop().expect("expected a return value on stack");
         self.close_upvalues(self.frame.slots);
 
         self.stack.truncate(self.frame.slots);
 
         self.stack.push(result);
-        if let Some(frame) = self.call_frames.pop() {
-            self.frame = frame;
-        } else {
-            unreachable!()
-        }
+        self.frame = self
+            .call_frames
+            .pop()
+            .expect("expected a previous call frame to exist when returning from function");
     }
 
     fn run_op_constant(&mut self) {
-        let index = self.frame.instructions.u8().unwrap();
-
-        let value = &self.frame.constants[index as usize];
-
-        // Push constant to strings table
-        let value = if let Value::Object(Object::String(s)) = value {
-            let s = s.to_string();
-            Value::Object(Object::String(self.intern_string(s)))
-        } else {
-            value.clone()
-        };
-
-        self.stack.push(value);
+        let value = self.frame.expect_constant();
+        self.stack.push(value.clone());
     }
 
     fn run_op_define_global(&mut self) {
-        let index = self.frame.instructions.u8().unwrap();
-        let value = &self.frame.constants[index as usize];
-        let name = if let Value::Object(Object::String(s)) = value {
-            self.intern_string(s.to_string())
-        } else {
-            panic!(
-                "tried to define global with non string identifier, it's a bug in VM or compiler"
-            )
-        };
-        let Some(value) = self.stack.last() else {
-            panic!("tried to define global with no value on stack, it's a bug in VM or compiler")
-        };
+        let name = self
+            .frame
+            .expect_constant()
+            .try_to_string()
+            .expect("tried to define global with non string identifier");
+        let value = self
+            .stack
+            .last()
+            .expect("tried to define global with no value on stack");
         self.globals.insert(name, value.clone());
         self.stack.pop();
     }
 
     fn run_op_get_global(&mut self) -> Result<(), RuntimeError> {
-        let index = self.frame.instructions.u8().unwrap();
-        let Some(name) = self.frame.constants[index as usize].try_to_string() else {
-            panic!("tried to get global with non string identifier, it's a bug in VM or compiler")
-        };
+        let name = self
+            .frame
+            .expect_constant()
+            .try_to_string()
+            .expect("tried to get global with non string identifier");
+
         if let Some(value) = self.globals.get(&name) {
             self.stack.push(value.clone());
         } else {
@@ -251,13 +250,20 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_set_global(&mut self) -> Result<(), RuntimeError> {
-        let index = self.frame.instructions.u8().unwrap();
-        let Some(name) = self.frame.constants[index as usize].try_to_string() else {
-            panic!("tried to set global with non string identifier, it's a bug in VM or compiler")
-        };
+        let name = self
+            .frame
+            .expect_constant()
+            .try_to_string()
+            .expect("tried to set global with non string identifier");
+
         match self.globals.entry(name) {
             Entry::Occupied(mut entry) => {
-                entry.insert(self.stack.last().unwrap().clone());
+                let value = self
+                    .stack
+                    .last()
+                    .expect("tried to set global with no value on the stack")
+                    .clone();
+                entry.insert(value);
             }
             Entry::Vacant(entry) => {
                 let kind = RuntimeErrorKind::UndefinedVariable {
@@ -270,32 +276,26 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_get_local(&mut self) {
-        let slot = self.frame.instructions.u8().unwrap();
-        let Some(value) = self.stack[self.frame.slots..].get(slot as usize) else {
-            panic!("tried to get local with no value on stack, it's a bug in VM or compiler")
-        };
-        self.stack.push(value.clone());
+        let value = self.expect_local().clone();
+        self.stack.push(value);
     }
 
     fn run_op_set_local(&mut self) {
-        let slot = self.frame.instructions.u8().unwrap();
-        self.stack[self.frame.slots..][slot as usize] = self.stack.last().unwrap().clone();
+        *self.expect_local() = self
+            .stack
+            .last()
+            .expect("expected value on stack to set local variable")
+            .clone();
     }
 
     fn run_on_get_upvalue(&mut self) {
-        let upvalue_index = self.frame.instructions.u8().unwrap();
-        let upvalue = self
-            .frame
-            .closure
-            .as_ref()
-            .expect("tried to get upvalue without closure")
-            .upvalues[upvalue_index as usize]
-            .borrow();
+        let upvalue = self.frame.expect_upvalue();
         match &*upvalue {
             ObjUpvalue::Open(stack_idx) => {
-                let value = self.stack.get(*stack_idx).expect(
-                    "tried to get upvalue at invalid stack index, it's a bug in VM or compiler",
-                );
+                let value = self
+                    .stack
+                    .get(*stack_idx)
+                    .expect("tried to get upvalue at invalid stack index");
                 self.stack.push(value.clone());
             }
             ObjUpvalue::Closed(value) => {
@@ -305,14 +305,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_set_upvalue(&mut self) {
-        let upvalue_idx = self.frame.instructions.u8().unwrap();
-        let mut upvalue = self
-            .frame
-            .closure
-            .as_ref()
-            .expect("tried to set upvalue without closure")
-            .upvalues[upvalue_idx as usize]
-            .borrow_mut();
+        let mut upvalue = self.frame.expect_upvalue();
         let value = self
             .stack
             .last()
@@ -320,9 +313,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .clone();
         match &mut *upvalue {
             ObjUpvalue::Open(stack_idx) => {
-                let stack_slot = self.stack.get_mut(*stack_idx).expect(
-                    "tried to set upvalue at invalid stack index, it's a bug in VM or compiler",
-                );
+                let stack_slot = self
+                    .stack
+                    .get_mut(*stack_idx)
+                    .expect("tried to set upvalue at invalid stack index");
                 *stack_slot = value;
             }
             ObjUpvalue::Closed(upvalue) => {
@@ -332,27 +326,31 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_get_property(&mut self) -> Result<(), RuntimeError> {
-        let Some(instance) = self.stack.last().unwrap().try_to_instance() else {
+        // Stack: bottom, .., instance
+
+        let Some(instance) = self
+            .stack
+            .last()
+            .expect("expected instance on stack to get property")
+            .try_to_instance()
+        else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
         let instance = instance.borrow();
-        let name_idx = self.frame.instructions.u8().unwrap();
-        let name = self
+        let prop_name = self
             .frame
-            .constants
-            .get(name_idx as usize)
-            .expect("tried to get property name at invalid index, it's a bug in VM or compiler")
+            .expect_constant()
             .try_to_string()
-            .expect("tried to get property name from non string, it's a bug in VM or compiler");
-        let value = instance.fields.get(&name);
-        match value {
+            .expect("tried to get property name from non string");
+        let prop_value = instance.properties.get(&prop_name);
+        match prop_value {
             Some(value) => {
                 self.stack.pop(); // instance
                 self.stack.push(value.clone());
             }
             None => {
-                self.bind_method(&instance.class.borrow(), name)?;
+                self.bind_method(&instance.class.borrow(), prop_name)?;
             }
         }
 
@@ -365,118 +363,146 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let Some(instance) = self
             .stack
             .get(self.stack.len() - 2)
-            .unwrap()
+            .expect("expected instance on stack to set property")
             .try_to_instance()
         else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
-        let name_idx = self.frame.instructions.u8().unwrap();
         let name = self
             .frame
-            .constants
-            .get(name_idx as usize)
-            .expect("tried to get property name at invalid index, it's a bug in VM or compiler")
+            .expect_constant()
             .try_to_string()
-            .expect("tried to set property name from non string, it's a bug in VM or compiler");
-        let value = self.stack.last().unwrap().clone();
+            .expect("tried to set property name from non string");
+        let value = self
+            .stack
+            .pop()
+            .expect("expected value on the stack to set property")
+            .clone();
 
-        instance.borrow_mut().fields.insert(name, value);
-        let value = self.stack.pop().unwrap();
-        self.stack.pop();
-        //instance
+        instance.borrow_mut().properties.insert(name, value.clone());
+        self.stack.pop(); // instance
         self.stack.push(value);
 
         Ok(())
     }
 
     fn run_op_negate(&mut self) -> Result<(), RuntimeError> {
-        let value = self.stack.pop();
-        match value {
-            Some(Value::Number(v)) => {
-                self.stack.push(Value::Number(-v));
-            }
-            Some(val) => {
-                self.stack.push(val);
-                let kind = RuntimeErrorKind::InvalidOperand { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
-            }
-            None => {
-                panic!("tried to do negate with no value on stack, it's a bug in VM or compiler")
-            }
+        let value = self
+            .stack
+            .pop()
+            .expect("tried to negate with no value on stack");
+
+        if let Value::Number(v) = value {
+            self.stack.push(Value::Number(-v));
+        } else {
+            let kind = RuntimeErrorKind::InvalidOperand { expected: "number" };
+            return Err(self.runtime_error(kind, 1));
         }
 
         Ok(())
     }
 
     fn run_op_not(&mut self) {
-        let value = self.stack.pop();
-        match value {
-            Some(value) => {
-                self.stack.push(Value::Bool(value.is_falsey()));
-            }
-            None => {
-                panic!("tried to do not with no value on stack, it's a bug in VM or compiler")
-            }
-        }
+        let value = self
+            .stack
+            .pop()
+            .expect("tried to not with no value on stack");
+
+        self.stack.push(Value::Bool(value.is_falsey()));
     }
 
     fn run_op_eq(&mut self) {
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
-        match (lhs, rhs) {
-            (Some(lhs), Some(rhs)) => {
-                self.stack.push(Value::Bool(lhs == rhs));
-            }
-            _ => {
-                panic!("tried to do eq binary op with not enough values on stack, it's a bug in VM or compiler")
-            }
-        }
+        let rhs = self
+            .stack
+            .pop()
+            .expect("tried to eq with no rhs value on stack");
+        let lhs = self
+            .stack
+            .pop()
+            .expect("tried to eq with no lhs value on stack");
+
+        self.stack.push(Value::Bool(lhs == rhs));
     }
 
     fn run_op_print(&mut self)
     where
         for<'b> &'b mut OUT: io::Write,
     {
-        let value = self.stack.pop();
-        match value {
-            Some(value) => {
-                writeln!(&mut self.output, "{}", value).unwrap();
-            }
-            None => {
-                panic!("tried to print with no value on stack, it's a bug in VM or compiler")
+        let value = self
+            .stack
+            .pop()
+            .expect("tried to print with no value on stack");
+
+        match writeln!(&mut self.output, "{}", value) {
+            Ok(_) => (),
+            Err(_) => {
+                eprintln!("failed to write to output, aborting ...");
+                std::process::abort();
             }
         }
     }
 
     fn run_op_jump_if_false(&mut self) {
-        let offset = self.frame.instructions.u16().unwrap();
-        if self.stack.last().unwrap().is_falsey() {
+        let offset = self
+            .frame
+            .instructions
+            .try_u16()
+            .expect("expected an u16 operand for op jump_if_false");
+
+        if self
+            .stack
+            .last()
+            .expect("tried a conditional jump with no value on stack")
+            .is_falsey()
+        {
             self.frame.instructions.jump_forward(offset as usize);
         }
     }
 
     fn run_op_jump(&mut self) {
-        let offset = self.frame.instructions.u16().unwrap();
+        let offset = self
+            .frame
+            .instructions
+            .try_u16()
+            .expect("expected an u16 operand for op jump");
+
         self.frame.instructions.jump_forward(offset as usize);
     }
 
     fn run_op_loop(&mut self) {
-        let offset = self.frame.instructions.u16().unwrap();
+        let offset = self
+            .frame
+            .instructions
+            .try_u16()
+            .expect("expected an u16 operand for op loop");
+
         self.frame.instructions.jump_backward(offset as usize);
     }
 
     fn run_op_call(&mut self) -> Result<(), RuntimeError> {
-        let arg_count = self.frame.instructions.u8().unwrap();
-        let callee = self.stack[self.stack.len() - arg_count as usize - 1].clone();
+        // Stack: bottom, .., callee, arg0, arg1, .., argN
+
+        let arg_count = self
+            .frame
+            .instructions
+            .try_u8()
+            .expect("expected an u8 operand for op call");
+        let callee = self
+            .stack
+            .get(self.stack.len() - arg_count as usize - 1)
+            .expect("expected callee on stack")
+            .clone();
         self.call_value(callee, arg_count)?;
         Ok(())
     }
 
     fn run_op_closure(&mut self) {
-        let idx = self.frame.instructions.u8().unwrap();
-        let fun = self.frame.constants.get(idx as usize).unwrap().clone();
-        let fun = fun.try_to_function().unwrap();
+        let fun = self
+            .frame
+            .expect_constant()
+            .try_to_function()
+            .expect("expected a function on stack for op closure");
 
         #[cfg(feature = "debug_disassemble")]
         {
@@ -491,18 +517,35 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         let mut upvalues = Vec::with_capacity(fun.upvalues_count);
         for _ in 0..fun.upvalues_count {
-            let is_local = self.frame.instructions.u8().unwrap();
-            let index = self.frame.instructions.u8().unwrap();
+            let is_local = self
+                .frame
+                .instructions
+                .try_u8()
+                .expect("expected an u8 operand for op closure upvalue");
+            let index = self
+                .frame
+                .instructions
+                .try_u8()
+                .expect("expected a second u8 operand for op closure upvalue");
+
             let upvalue = if is_local == 1 {
                 self.capture_upvalue(self.frame.slots + index as usize)
             } else {
-                Rc::clone(&self.frame.closure.as_ref().unwrap().upvalues[index as usize])
+                Rc::clone(
+                    self.frame
+                        .closure
+                        .as_ref()
+                        .expect("expected to be inside closure to have upvalues")
+                        .upvalues
+                        .get(index as usize)
+                        .expect("tried to get upvalue at invalid index"),
+                )
             };
 
             upvalues.push(upvalue);
         }
 
-        let closure = Value::new_object(Object::Closure(Rc::new(ObjClosure::new(fun, upvalues))));
+        let closure = Value::new_closure(ObjClosure::new(fun, upvalues));
         self.stack.push(closure);
     }
 
@@ -512,61 +555,62 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_class(&mut self) {
-        let const_idx = self.frame.instructions.u8().unwrap();
         let name = self
             .frame
-            .constants
-            .get(const_idx as usize)
-            .expect("tried to get constant at invalid index, it's a bug in VM or compiler")
-            .clone();
-        let name = name
+            .expect_constant()
             .try_to_string()
-            .expect("tried to get class name from non string, it's a bug in VM or compiler");
-        let class = ObjClass::new(name);
-        let class = Value::new_object(Object::Class(Rc::new(RefCell::new(class))));
+            .expect("tried to get class name from non string");
+
+        let class = Value::new_class(ObjClass::new(name));
         self.stack.push(class);
     }
 
     fn run_op_method(&mut self) {
         // Stack: bottom, .., class, method
 
-        let const_idx = self.frame.instructions.u8().unwrap();
         let name = self
             .frame
-            .constants
-            .get(const_idx as usize)
-            .expect("tried to get constant at invalid index, it's a bug in VM or compiler")
-            .clone();
-        let name = name
+            .expect_constant()
             .try_to_string()
-            .expect("tried to get method name from non string, it's a bug in VM or compiler");
-        let Some(class) = self.stack.get(self.stack.len() - 2).unwrap().try_to_class() else {
-            panic!("tried to define method on non class, it's a bug in VM or compiler")
-        };
+            .expect("tried to get method name from non string");
+        let class = self
+            .stack
+            .get(self.stack.len() - 2)
+            .expect("expected class to be on stack to define method on")
+            .try_to_class()
+            .expect("tried to define a method on non class");
 
-        let method = self.stack.pop().unwrap().try_to_closure().unwrap();
+        let method = self
+            .stack
+            .pop()
+            .expect("expected value to be on stack to be defined as class method")
+            .try_to_closure()
+            .expect("expected a closure on stack to be defined as class method");
         class.borrow_mut().methods.insert(name, method);
     }
 
     fn run_op_invoke(&mut self) -> Result<(), RuntimeError> {
-        let name_idx = self.frame.instructions.u8().unwrap();
         let name = self
             .frame
-            .constants
-            .get(name_idx as usize)
-            .expect("tried to get constant at invalid index, it's a bug in VM or compiler")
+            .expect_constant()
             .try_to_string()
-            .expect("tried to invoke method name from non string, it's a bug in VM or compiler");
-        let arg_count = self.frame.instructions.u8().unwrap();
+            .expect("tried to get method name from non string");
+        let arg_count = self
+            .frame
+            .instructions
+            .try_u8()
+            .expect("expected a second u8 operand for op invoke");
         self.invoke(name, arg_count)?;
         Ok(())
     }
 
     fn run_op_inherit(&mut self) -> Result<(), RuntimeError> {
+        // Stack: bottom, .., superclass, subclass
+
         let Some(super_class) = self
             .stack
             .get(self.stack.len() - 2)
-            .expect("expected class on stack, it's a bug in VM or compiler")
+            .expect("expected superclass on stack")
             .try_to_class()
         else {
             let kind = RuntimeErrorKind::Msg("superclass must be a class".into());
@@ -574,10 +618,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         };
         let class = self
             .stack
-            .last()
-            .expect("expected class on stack, it's a bug in VM or compiler")
+            .pop()
+            .expect("expected value on stack for op inherit")
             .try_to_class()
-            .expect("expected class on stack, it's a bug in VM or compiler");
+            .expect("expected subclass on stack");
         class.borrow_mut().methods.extend(
             super_class
                 .borrow()
@@ -585,26 +629,24 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone())),
         );
-        self.stack.pop();
 
         Ok(())
     }
 
     fn run_op_get_super(&mut self) -> Result<(), RuntimeError> {
-        let method_name_idx = self.frame.instructions.u8().unwrap();
+        // Stack: bottom, .., superclass
+
         let method_name = self
             .frame
-            .constants
-            .get(method_name_idx as usize)
-            .expect("tried to get constant at invalid index, it's a bug in VM or compiler")
+            .expect_constant()
             .try_to_string()
-            .expect("tried to get method name from non string, it's a bug in VM or compiler");
+            .expect("tried to get method name from non string");
         let superclass = self
             .stack
             .pop()
-            .expect("expected class on stack, it's a bug in VM or compiler")
+            .expect("expected value on stack for op get super")
             .try_to_class()
-            .expect("expected class on stack, it's a bug in VM or compiler");
+            .expect("expected superclass on stack");
         let superclass = superclass.borrow();
         self.bind_method(&superclass, method_name)?;
         Ok(())
@@ -620,7 +662,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         let instance = instance.borrow();
 
-        if let Some(field) = instance.fields.get(&name) {
+        if let Some(field) = instance.properties.get(&name) {
             let idx = self.stack.len() - arg_count as usize - 1;
             self.stack[idx] = field.clone();
             return self.call_value(field.clone(), arg_count);
@@ -650,8 +692,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             return Err(self.runtime_error(kind, 1));
         };
 
-        let method = ObjBoundMethod::new(self.stack.pop().unwrap().clone(), Rc::clone(method));
-        let method = Value::Object(Object::BoundMethod(Rc::new(method)));
+        let receiver = self
+            .stack
+            .pop()
+            .expect("expected receiver on stack")
+            .clone();
+        let method = ObjBoundMethod::new(receiver, Rc::clone(method));
+        let method = Value::new_bound_method(method);
 
         self.stack.push(method);
         Ok(())
@@ -734,7 +781,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn define_native(&mut self, name: impl Into<String> + AsRef<str>, fun: NativeFn) {
-        let name = self.intern_string(name);
+        let name = self.strings.intern(name);
         let fun = Object::NativeFn(Rc::new(fun));
         let fun = Value::new_object(fun);
         self.globals.insert(name, fun);
@@ -743,7 +790,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn native_clock(_arg_count: u8, _args: &[Value]) -> Value {
         let time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("expected current time to be after unix epoch")
             .as_secs_f64();
 
         Value::Number(time)
@@ -808,18 +855,6 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     //     Ok(())
     // }
 
-    fn intern_string(&mut self, s: impl Into<String> + AsRef<str>) -> InternedString {
-        let s_ref = s.as_ref();
-        match self.strings.get(s_ref) {
-            Some(existing) => existing.clone(),
-            None => {
-                let new = InternedString::new(s.into());
-                self.strings.insert(new.clone());
-                new
-            }
-        }
-    }
-
     fn run_binary_add(&mut self) -> Result<(), RuntimeError> {
         let op = Self::add_number;
         let rhs = self.stack.pop();
@@ -831,7 +866,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => match (lhs, rhs) {
                 (Object::String(lhs), Object::String(rhs)) => {
                     let new = lhs.to_string() + &rhs;
-                    let new = self.intern_string(new);
+                    let new = self.strings.intern(new);
                     self.stack.push(Value::new_object(Object::String(new)));
                 }
                 _ => {
@@ -850,7 +885,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 return Err(self.runtime_error(kind, 1));
             }
             _ => {
-                panic!("tried to do binary add with not enough values on stack, it's a bug in VM or compiler")
+                panic!("tried to do binary add with not enough values on stack")
             }
         }
 
@@ -872,7 +907,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 return Err(self.runtime_error(kind, 1));
             }
             _ => {
-                panic!("tried to do arithmetic binary op with not enough values on stack, it's a bug in VM or compiler")
+                panic!("tried to do arithmetic binary op with not enough values on stack")
             }
         }
 
@@ -894,7 +929,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 return Err(self.runtime_error(kind, 1));
             }
             _ => {
-                panic!("tried to do cmp binary op with not enough values on stack, it's a bug in VM or compiler")
+                panic!("tried to do cmp binary op with not enough values on stack")
             }
         }
         Ok(())
@@ -939,6 +974,18 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .map(|span| span.into());
         RuntimeError { kind, span }
     }
+
+    /// Expects that next byte in instructions is a local index and reads the local
+    fn expect_local(&mut self) -> &mut Value {
+        let idx = self
+            .frame
+            .instructions
+            .try_u8()
+            .expect("tried to read local with no more instructions");
+        self.stack
+            .get_mut(self.frame.slots + idx as usize)
+            .expect("tried to get local at invalid index")
+    }
 }
 
 #[derive(Debug)]
@@ -958,6 +1005,70 @@ impl CallFrame {
             spans: Rc::new(HashMap::new()),
             constants: Rc::new([]),
             closure: None,
+        }
+    }
+
+    /// Expects that next byte in instructions is a constant index and reads the constant
+    fn expect_constant(&mut self) -> &Value {
+        let idx = self
+            .instructions
+            .try_u8()
+            .expect("tried to read constant with no more instructions");
+        self.constants
+            .get(idx as usize)
+            .expect("tried to get constant at invalid index")
+    }
+
+    fn expect_upvalue(&mut self) -> RefMut<'_, ObjUpvalue> {
+        let upvalue_index = self
+            .instructions
+            .try_u8()
+            .expect("expected an u8 operand for op get upvalue");
+
+        let closure = self
+            .closure
+            .as_ref()
+            .expect("tried to get upvalue without closure");
+
+        closure
+            .upvalues
+            .get(upvalue_index as usize)
+            .expect("tried to get upvalue at invalid index")
+            .borrow_mut()
+    }
+}
+
+#[derive(Debug)]
+pub struct StringInterner {
+    strings: HashSet<InternedString>,
+}
+
+impl StringInterner {
+    pub fn new() -> Self {
+        Self {
+            strings: HashSet::new(),
+        }
+    }
+
+    pub fn intern(&mut self, s: impl Into<String> + AsRef<str>) -> InternedString {
+        let s_ref = s.as_ref();
+        match self.strings.get(s_ref) {
+            Some(existing) => existing.clone(),
+            None => {
+                let new = InternedString::new(s.into());
+                self.strings.insert(new.clone());
+                new
+            }
+        }
+    }
+
+    pub fn intern_existing(&mut self, s: InternedString) -> InternedString {
+        match self.strings.get(&s) {
+            Some(existing) => existing.clone(),
+            None => {
+                self.strings.insert(s.clone());
+                s
+            }
         }
     }
 }
