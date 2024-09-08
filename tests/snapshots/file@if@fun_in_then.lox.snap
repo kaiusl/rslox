@@ -9,7 +9,7 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found 'fun'
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found 'fun'
    ╭─[2:11]
  1 │ // [line 2] Error at 'fun': Expect expression.
  2 │ if (true) fun foo() {}

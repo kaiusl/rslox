@@ -9,22 +9,6 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected RBrace, found 'ident'
-   ╭─[2:3]
- 1 │ class Foo {
- 2 │   inFoo() {
-   ·   ──┬──
-   ·     ╰── here
- 3 │     print "in foo";
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[4:3]
- 3 │     print "in foo";
- 4 │   }
-   ·   ┬
-   ·   ╰── here
- 5 │ }
-   ╰────
 Error:   × expected LBrace, found '<'
    ╭─[7:11]
  6 │ 
@@ -33,7 +17,7 @@ Error:   × expected LBrace, found '<'
    ·           ╰── here
  8 │   inBar() {
    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found '}'
     ╭─[10:3]
   9 │     print "in bar";
  10 │   }
@@ -49,7 +33,7 @@ Error:   × expected LBrace, found '<'
     ·           ╰── here
  14 │   inBaz() {
     ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found '}'
     ╭─[16:3]
  15 │     print "in baz";
  16 │   }

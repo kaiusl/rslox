@@ -122,6 +122,7 @@ pub enum Object {
     Upvalue(Rc<RefCell<ObjUpvalue>>),
     Class(Rc<RefCell<ObjClass>>),
     Instance(Rc<RefCell<ObjInstance>>),
+    BoundMethod(Rc<ObjBoundMethod>),
 }
 
 impl fmt::Display for Object {
@@ -134,6 +135,7 @@ impl fmt::Display for Object {
             Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
             Object::Class(cls) => write!(f, "{}", RefCell::borrow(cls)),
             Object::Instance(inst) => write!(f, "{}", RefCell::borrow(inst)),
+            Object::BoundMethod(bm) => write!(f, "{}", bm),
         }
     }
 }
@@ -305,5 +307,23 @@ impl ObjInstance {
 impl fmt::Display for ObjInstance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<instance {}>", RefCell::borrow(&self.class).name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjBoundMethod {
+    pub receiver: Value,
+    pub method: Rc<ObjClosure>,
+}
+
+impl fmt::Display for ObjBoundMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.method)
+    }
+}
+
+impl ObjBoundMethod {
+    pub fn new(receiver: Value, method: Rc<ObjClosure>) -> Self {
+        Self { receiver, method }
     }
 }

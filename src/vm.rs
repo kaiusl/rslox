@@ -9,8 +9,8 @@ use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
 use crate::disassembler::Disassembler;
 use crate::value::{
-    InternedString, NativeFn, ObjClass, ObjClosure, ObjFunction, ObjInstance, ObjUpvalue, Object,
-    Value,
+    InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction, ObjInstance,
+    ObjUpvalue, Object, Value,
 };
 
 use self::error::{RuntimeError, RuntimeErrorKind};
@@ -280,8 +280,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                             self.stack.push(value.clone());
                         }
                         None => {
-                            let kind = RuntimeErrorKind::UndefinedProperty { name };
-                            return Err(self.runtime_error(kind, 2));
+                            self.bind_method(&instance.class.borrow(), name)?;
                         }
                     }
                 }
@@ -494,6 +493,19 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
+    fn bind_method(&mut self, class: &ObjClass, name: InternedString) -> Result<(), RuntimeError> {
+        let Some(method) = class.methods.get(&name) else {
+            let kind = RuntimeErrorKind::UndefinedProperty { name };
+            return Err(self.runtime_error(kind, 1));
+        };
+
+        let method = ObjBoundMethod::new(self.stack.pop().unwrap().clone(), Rc::clone(method));
+        let method = Value::Object(Object::BoundMethod(Rc::new(method)));
+
+        self.stack.push(method);
+        Ok(())
+    }
+
     fn close_upvalues(&mut self, idx: usize) {
         while let Some(last) = self.open_upvalues.last_entry() {
             if *last.key() >= idx {
@@ -545,6 +557,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 self.stack.push(instance);
                 Ok(())
             }
+            Value::Object(Object::BoundMethod(method)) => {
+                let receiver_slot = self.stack.len() - arg_count as usize - 1;
+                self.stack[receiver_slot] = method.receiver.clone();
+                self.call_closure(&method.method, arg_count)
+            }
+
             _ => {
                 let kind = RuntimeErrorKind::Msg("can only call functions and classes".into());
                 Err(self.runtime_error(kind, 2))

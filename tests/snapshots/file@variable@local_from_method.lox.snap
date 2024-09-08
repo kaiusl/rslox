@@ -4,24 +4,7 @@ description: "var foo = \"variable\";\n\nclass Foo {\n  method() {\n    print fo
 input_file: crafting_interpreters_test_files/variable/local_from_method.lox
 ---
 OUT: 
+variable
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected RBrace, found 'ident'
-   ╭─[4:3]
- 3 │ class Foo {
- 4 │   method() {
-   ·   ───┬──
-   ·      ╰── here
- 5 │     print foo;
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[6:3]
- 5 │     print foo;
- 6 │   }
-   ·   ┬
-   ·   ╰── here
- 7 │ }
-   ╰────
+ERR:

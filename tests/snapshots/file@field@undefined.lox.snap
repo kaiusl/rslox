@@ -8,9 +8,3 @@ OUT:
 ===
 ERR: 
   × undefined property `bar`
-   ╭─[4:5]
- 3 │ 
- 4 │ foo.bar; // expect runtime error: Undefined property 'bar'.
-   ·     ─┬─
-   ·      ╰── here
-   ╰────

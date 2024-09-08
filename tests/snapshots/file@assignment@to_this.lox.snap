@@ -9,19 +9,11 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected RBrace, found 'ident'
-   ╭─[2:3]
- 1 │ class Foo {
+Error:   × invalid assignment target
+   ╭─[3:10]
  2 │   Foo() {
-   ·   ─┬─
-   ·    ╰── here
  3 │     this = "value"; // Error at '=': Invalid assignment target.
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[4:3]
- 3 │     this = "value"; // Error at '=': Invalid assignment target.
+   ·          ┬
+   ·          ╰── here
  4 │   }
-   ·   ┬
-   ·   ╰── here
- 5 │ }
    ╰────

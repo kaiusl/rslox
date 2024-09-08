@@ -4,24 +4,8 @@ description: "class Foo {\n  bar(arg) {\n    print arg;\n  }\n}\n\nvar bar = Foo
 input_file: crafting_interpreters_test_files/field/method.lox
 ---
 OUT: 
+got method
+arg
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected RBrace, found 'ident'
-   ╭─[2:3]
- 1 │ class Foo {
- 2 │   bar(arg) {
-   ·   ─┬─
-   ·    ╰── here
- 3 │     print arg;
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[4:3]
- 3 │     print arg;
- 4 │   }
-   ·   ┬
-   ·   ╰── here
- 5 │ }
-   ╰────
+ERR:

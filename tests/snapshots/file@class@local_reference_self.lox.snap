@@ -4,39 +4,7 @@ description: "{\n  class Foo {\n    returnSelf() {\n      return Foo;\n    }\n  
 input_file: crafting_interpreters_test_files/class/local_reference_self.lox
 ---
 OUT: 
+<class Foo>
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected RBrace, found 'ident'
-   ╭─[3:5]
- 2 │   class Foo {
- 3 │     returnSelf() {
-   ·     ─────┬────
-   ·          ╰── here
- 4 │       return Foo;
-   ╰────
-Error:   × can't return from top-level code
-   ╭─[4:7]
- 3 │     returnSelf() {
- 4 │       return Foo;
-   ·       ───┬──
-   ·          ╰── here
- 5 │     }
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[5:5]
- 4 │       return Foo;
- 5 │     }
-   ·     ┬
-   ·     ╰── here
- 6 │   }
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[9:1]
- 8 │   print Foo().returnSelf(); // expect: Foo
- 9 │ }
-   · ┬
-   · ╰── here
-   ╰────
+ERR:

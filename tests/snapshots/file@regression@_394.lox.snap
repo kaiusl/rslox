@@ -17,7 +17,7 @@ Error:   × expected LBrace, found '<'
    ·           ╰── here
  4 │   print B; // expect: B
    ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found '}'
    ╭─[5:1]
  4 │   print B; // expect: B
  5 │ }

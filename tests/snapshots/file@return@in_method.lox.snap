@@ -4,32 +4,7 @@ description: "class Foo {\n  method() {\n    return \"ok\";\n    print \"bad\";\
 input_file: crafting_interpreters_test_files/return/in_method.lox
 ---
 OUT: 
+ok
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected RBrace, found 'ident'
-   ╭─[2:3]
- 1 │ class Foo {
- 2 │   method() {
-   ·   ───┬──
-   ·      ╰── here
- 3 │     return "ok";
-   ╰────
-Error:   × can't return from top-level code
-   ╭─[3:5]
- 2 │   method() {
- 3 │     return "ok";
-   ·     ───┬──
-   ·        ╰── here
- 4 │     print "bad";
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-   ╭─[5:3]
- 4 │     print "bad";
- 5 │   }
-   ·   ┬
-   ·   ╰── here
- 6 │ }
-   ╰────
+ERR:

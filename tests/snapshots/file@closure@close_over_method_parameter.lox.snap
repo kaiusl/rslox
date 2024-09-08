@@ -4,24 +4,7 @@ description: "var f;\n\nclass Foo {\n  method(param) {\n    fun f_() {\n      pr
 input_file: crafting_interpreters_test_files/closure/close_over_method_parameter.lox
 ---
 OUT: 
+param
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected RBrace, found 'ident'
-   ╭─[4:3]
- 3 │ class Foo {
- 4 │   method(param) {
-   ·   ───┬──
-   ·      ╰── here
- 5 │     fun f_() {
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false', found '}'
-    ╭─[9:3]
-  8 │     f = f_;
-  9 │   }
-    ·   ┬
-    ·   ╰── here
- 10 │ }
-    ╰────
+ERR:

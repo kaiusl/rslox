@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::u16;
@@ -19,6 +20,7 @@ use self::error::{CompileError, CompileErrorKind, StaticErrors};
 pub enum FunType {
     Function,
     Script,
+    Method,
 }
 
 pub struct Compiler<'a> {
@@ -27,6 +29,17 @@ pub struct Compiler<'a> {
     pub errors: StaticErrors<'a>,
 
     pub chunk: CompileUnit,
+    pub current_class: Option<ClassCompileUnit>,
+}
+
+pub struct ClassCompileUnit {
+    pub parent: Option<Box<ClassCompileUnit>>,
+}
+
+impl ClassCompileUnit {
+    pub fn new(parent: Option<Box<ClassCompileUnit>>) -> Self {
+        Self { parent }
+    }
 }
 
 pub struct CompileUnit {
@@ -83,9 +96,10 @@ impl<'a> Compiler<'a> {
             errors: StaticErrors::new(source),
             chunk: CompileUnit::new(
                 FunType::Script,
-                Spanned::new(String::from("main"), Span::from_len(0, 0, 0)),
+                Spanned::new(String::from("this"), Span::from_len(0, 0, 0)),
                 None,
             ),
+            current_class: None,
         }
     }
 
@@ -163,6 +177,11 @@ impl<'a> Compiler<'a> {
 
         self.emit(Instruction::Class(const_idx), span.clone());
         self.compile_define_variable(Spanned::new(const_idx, span.clone()));
+
+        self.current_class = Some(ClassCompileUnit::new(
+            self.current_class.take().map(Box::new),
+        ));
+
         self.compile_named_variable(&ident.item, span.clone(), false)?; // push class to the stack, so that methods can find it
 
         let _lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
@@ -177,6 +196,14 @@ impl<'a> Compiler<'a> {
         let _lbrace = self.consume(Token::is_rbrace, || &[TokenKind::RBrace])?;
         self.emit(Instruction::Pop, span.clone()); // pop class
 
+        self.current_class = self
+            .current_class
+            .as_mut()
+            .unwrap()
+            .parent
+            .take()
+            .map(|c| *c);
+
         Ok(())
     }
 
@@ -185,11 +212,7 @@ impl<'a> Compiler<'a> {
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = ident.span.clone();
         let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
-        self.compile_function(
-            None,
-            ident.map(|ident| ident.to_string()),
-            FunType::Function,
-        )?;
+        self.compile_function(None, ident.map(|ident| ident.to_string()), FunType::Method)?;
         self.emit(Instruction::Method(const_idx), span.clone());
 
         Ok(())
@@ -216,9 +239,18 @@ impl<'a> Compiler<'a> {
         name: Spanned<String>,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
+        let unit_name = if fun_type == FunType::Method {
+            "this".into()
+        } else {
+            String::new()
+        };
         let prev_chunk = std::mem::replace(
             &mut self.chunk,
-            CompileUnit::new(fun_type, name.clone(), None),
+            CompileUnit::new(
+                fun_type,
+                Spanned::new(unit_name, Span::from_len(0, 0, 0)),
+                None,
+            ),
         );
         self.chunk.parent = Some(Box::new(prev_chunk));
 
@@ -803,8 +835,19 @@ impl<'a> Compiler<'a> {
                 )
                 .map(|_| ()),
             Token::Ident(ident) => self.compile_variable(ident, prefix.span, can_assign),
+            Token::Keyword(Keyword::This) => self.compile_this(prefix),
             _ => unreachable!("Invalid prefix operator."),
         }
+    }
+
+    fn compile_this(&mut self, this_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+        if self.current_class.is_none() {
+            let kind = CompileErrorKind::Msg("can't use 'this' outside of a class".into());
+            let err = CompileError::new(kind, this_kw.span);
+            return Err(err.into());
+        }
+
+        self.compile_variable("this", this_kw.span, false)
     }
 
     fn compile_variable(
@@ -949,7 +992,7 @@ impl<'a> Compiler<'a> {
                 | Token::Bang
                 | Token::String { .. }
                 | Token::Ident(_)
-                | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False)
+                | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False | Keyword::This)
         )
     }
 
@@ -964,6 +1007,7 @@ impl<'a> Compiler<'a> {
             TokenKind::Keyword(Keyword::Nil),
             TokenKind::Keyword(Keyword::True),
             TokenKind::Keyword(Keyword::False),
+            TokenKind::Keyword(Keyword::This),
         ]
     }
 
