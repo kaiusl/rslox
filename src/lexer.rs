@@ -1,6 +1,6 @@
 use std::borrow::Cow;
+use std::fmt;
 use std::str::FromStr;
-use std::{fmt, ops};
 
 mod error;
 #[cfg(test)]
@@ -65,6 +65,10 @@ impl<'a> PeekableLexer<'a> {
         self.line
     }
 
+    #[allow(
+        clippy::should_implement_trait,
+        reason = "Result<Option<>> makes it easier to use in compiler. We only ever need `next` method."
+    )]
     pub fn next(&mut self) -> Result<Option<Spanned<Token<'a>>>, LexerError<'a>> {
         let result = if self.peeked.is_some() {
             self.peeked.take().unwrap()
@@ -79,7 +83,6 @@ impl<'a> PeekableLexer<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Chars<'a> {
-    input: &'a str,
     inner: std::iter::Peekable<std::str::Chars<'a>>,
     byte_index: usize,
 }
@@ -87,7 +90,6 @@ pub struct Chars<'a> {
 impl<'a> Chars<'a> {
     pub fn new(input: &'a str) -> Self {
         Chars {
-            input,
             inner: input.chars().peekable(),
             byte_index: 0,
         }
@@ -629,7 +631,6 @@ impl<'a> Token<'a> {
         BookTokenFmt { token: self }
     }
 
-    #[must_use]
     pub fn try_into_ident(self) -> Result<&'a str, Self> {
         if let Self::Ident(v) = self {
             Ok(v)

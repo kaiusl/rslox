@@ -1,10 +1,6 @@
-use std::io::{BufRead, Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 
-use miette::Result;
-
-use rslox::compiler::Compiler;
-use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 use clap::Parser;
@@ -36,8 +32,8 @@ fn main() {
             const PROMPT: &str = ">> ";
             loop {
                 print!("{}", PROMPT);
-                std::io::stdout().flush();
-                std::io::stdin().read_line(&mut buffer);
+                std::io::stdout().flush().ok();
+                std::io::stdin().read_line(&mut buffer).ok();
 
                 //let input = std::str::from_utf8(&buffer).unwrap();
                 let input = buffer.trim_end_matches('\n');
@@ -45,8 +41,13 @@ fn main() {
                 if input == "@exit" {
                     break;
                 }
-                vm.compile(&input);
-                vm.run(&input);
+                match vm.compile(input) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        continue;
+                    }
+                }
+                vm.run(input);
 
                 buffer.clear();
             }

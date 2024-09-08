@@ -1,5 +1,5 @@
 use core::panic;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, Write};
@@ -8,10 +8,9 @@ use std::rc::Rc;
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
 use crate::compiler::Compiler;
-use crate::disassembler::Disassembler;
 use crate::value::{
-    InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction, ObjInstance,
-    ObjUpvalue, Object, Value,
+    InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjInstance, ObjUpvalue,
+    Object, Value,
 };
 
 use self::error::{RuntimeError, RuntimeErrorKind};
@@ -68,6 +67,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         vm
     }
 
+    #[allow(
+        clippy::result_unit_err,
+        reason = "it print all the errors to the output in self, but we still want to return if there was an error or not, this is clearer than returning a bool"
+    )]
     pub fn compile(&mut self, input: &str) -> Result<(), ()>
     where
         for<'b> &'b mut OUTERR: io::Write,
@@ -112,6 +115,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         for<'b> &'b mut OUT: io::Write,
     {
         while let Some(op) = self.frame.instructions.u8().map(OpCode::from_u8) {
+            if self.stack.len() > Self::STACK_MAX {
+                let kind = RuntimeErrorKind::Msg("stack overflow".into());
+                return Err(self.runtime_error(kind, 1));
+            }
+
             #[cfg(feature = "debug_trace")]
             {
                 print!("\n/ [");
@@ -506,10 +514,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         .stack
                         .get(self.stack.len() - 2)
                         .expect("expected class on stack, it's a bug in VM or compiler")
-                        .try_to_class() else {
-                            let kind = RuntimeErrorKind::Msg("superclass must be a class".into());
-                            return Err(self.runtime_error(kind, 1));
-                        };
+                        .try_to_class()
+                    else {
+                        let kind = RuntimeErrorKind::Msg("superclass must be a class".into());
+                        return Err(self.runtime_error(kind, 1));
+                    };
                     let class = self
                         .stack
                         .last()

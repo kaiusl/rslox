@@ -46,6 +46,11 @@ fn create_tests(path: impl AsRef<std::path::Path>, out: &mut impl Write) {
 #[ignore = "it's used to generate other tests, only run manually"]
 fn generate() {
     let mut file = std::fs::File::create("./tests/integration_tests.rs").unwrap();
+    writeln!(
+        &mut file,
+        r##"#![allow(non_snake_case, reason = "it's just a test name and not worth the effort")]"##
+    )
+    .unwrap();
     writeln!(&mut file, "mod common;").unwrap();
     writeln!(&mut file, "use common::*;").unwrap();
 

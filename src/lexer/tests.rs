@@ -7,7 +7,7 @@ enum LexerTestErr {
 }
 
 fn check_tokens(lexer: &mut Lexer<'_>, expected: &[Token<'_>]) {
-    let mut expected = expected.into_iter();
+    let mut expected = expected.iter();
     loop {
         match (lexer.next().unwrap(), expected.next()) {
             (Some(t), Some(e)) => assert_eq!(&t.item, e),
@@ -18,7 +18,7 @@ fn check_tokens(lexer: &mut Lexer<'_>, expected: &[Token<'_>]) {
 }
 
 fn check_tokens_with_errors(lexer: &mut Lexer<'_>, expected: &[Result<Token<'_>, LexerTestErr>]) {
-    let mut expected = expected.into_iter();
+    let mut expected = expected.iter();
 
     loop {
         match (lexer.next(), expected.next()) {

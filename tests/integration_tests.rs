@@ -1,5 +1,7 @@
+#![allow(non_snake_case, reason = "it's just a test name and not worth the effort")]
 mod common;
 use common::*;
+
 
 test_dir!(
     operator;
@@ -38,6 +40,7 @@ test_dir!(
     divide_nonnum_num,
 );
 
+
 test_dir!(
     class;
     inherit_self,
@@ -48,6 +51,7 @@ test_dir!(
     empty,
     inherited_method,
 );
+
 
 test_dir!(
     super;
@@ -73,6 +77,7 @@ test_dir!(
     super_in_inherited_method,
 );
 
+
 test_dir!(
     function;
     recursion,
@@ -91,6 +96,7 @@ test_dir!(
     extra_arguments,
 );
 
+
 test_dir!(
     return;
     after_while,
@@ -102,11 +108,23 @@ test_dir!(
     after_if,
 );
 
+
 test_dir!(
     block;
     scope,
     empty,
 );
+
+
+test_dir!(
+    limit;
+    too_many_constants,
+    loop_too_large,
+    too_many_locals,
+    stack_overflow,
+    too_many_upvalues,
+);
+
 
 test_dir!(
     if;
@@ -122,6 +140,7 @@ test_dir!(
     if,
 );
 
+
 test_dir!(
     logical_operator;
     or_truth,
@@ -129,6 +148,7 @@ test_dir!(
     and,
     and_truth,
 );
+
 
 test_dir!(
     for;
@@ -145,6 +165,7 @@ test_dir!(
     scope,
 );
 
+
 test_dir!(
     comments;
     line_at_eof,
@@ -152,6 +173,7 @@ test_dir!(
     unicode,
     only_line_comment,
 );
+
 
 test_dir!(
     assignment;
@@ -166,10 +188,12 @@ test_dir!(
     global,
 );
 
+
 test_dir!(
     nil;
     literal,
 );
+
 
 test_dir!(
     inheritance;
@@ -182,6 +206,7 @@ test_dir!(
     constructor,
 );
 
+
 test_dir!(
     while;
     closure_in_body,
@@ -192,6 +217,7 @@ test_dir!(
     return_closure,
     var_in_body,
 );
+
 
 test_dir!(
     variable;
@@ -219,11 +245,13 @@ test_dir!(
     in_middle_of_block,
 );
 
+
 test_dir!(
     regression;
     _40,
     _394,
 );
+
 
 test_dir!(
     bool;
@@ -231,10 +259,12 @@ test_dir!(
     not,
 );
 
+
 test_dir!(
     print;
     missing_argument,
 );
+
 
 test_dir!(
     closure;
@@ -253,6 +283,7 @@ test_dir!(
     unused_closure,
 );
 
+
 test_dir!(
     constructor;
     return_value,
@@ -267,6 +298,7 @@ test_dir!(
     extra_arguments,
     init_not_method,
 );
+
 
 test_dir!(
     field;
@@ -293,6 +325,7 @@ test_dir!(
     call_function_field,
 );
 
+
 test_dir!(
     call;
     object,
@@ -302,6 +335,7 @@ test_dir!(
     nil,
 );
 
+
 test_dir!(
     number;
     leading_dot,
@@ -310,6 +344,7 @@ test_dir!(
     nan_equality,
     trailing_dot,
 );
+
 
 test_dir!(
     method;
@@ -324,6 +359,7 @@ test_dir!(
     extra_arguments,
 );
 
+
 test_dir!(
     this;
     nested_closure,
@@ -334,6 +370,7 @@ test_dir!(
     this_in_top_level_function,
 );
 
+
 test_dir!(
     string;
     multiline,
@@ -342,4 +379,9 @@ test_dir!(
     unterminated,
 );
 
-test_dir!(empty_file, precedence, unexpected_character,);
+
+test_dir!(
+    empty_file,
+    precedence,
+    unexpected_character,
+);

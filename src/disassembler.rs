@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::bytecode::{ByteCode, BytesCursor, Instruction};
+use crate::bytecode::{BytesCursor, Instruction};
 use crate::common::Span;
 use crate::value::Value;
 
@@ -59,7 +59,7 @@ impl Disassembler {
 
                 if let Instruction::Closure(idx) = op {
                     let fun = &self.constants[idx as usize].try_to_function().unwrap();
-                    for i in 0..fun.upvalues_count {
+                    for _ in 0..fun.upvalues_count {
                         let is_local = self.cursor.u8().unwrap();
                         let index = self.cursor.u8().unwrap();
                         print!(
@@ -96,33 +96,4 @@ impl Iterator for Disassembler {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DisassemblerError {
     pub message: Cow<'static, str>,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::bytecode::ByteCode;
-    use crate::common::Span;
-    use crate::value::Value;
-
-    use super::*;
-
-    // #[test]
-    // fn it_disassembles() {
-    //     let mut code = ByteCode::new();
-    //     code.push(Instruction::Return, Span::new(0, 0, 5));
-    //     let idx = code.add_constant(Value::Number(1.254));
-    //     code.push(Instruction::Constant(idx as u8), Span::new(1, 6, 8));
-    //     code.push(Instruction::Negate, Span::new(2, 8, 10));
-    //     code.push(Instruction::Return, Span::new(1, 9, 12));
-
-    //     let mut disassembler = code.disassemble();
-
-    //     disassembler.clone().print();
-
-    //     assert_eq!(disassembler.next(), Some(Ok((0, Instruction::Return))));
-    //     assert_eq!(disassembler.next(), Some(Ok((1, Instruction::Constant(0)))));
-    //     assert_eq!(disassembler.next(), Some(Ok((3, Instruction::Negate))));
-    //     assert_eq!(disassembler.next(), Some(Ok((4, Instruction::Return))));
-    //     assert_eq!(disassembler.next(), None);
-    // }
 }

@@ -1,3 +1,10 @@
+#![allow(
+    dead_code,
+    unused_macros,
+    unused_imports,
+    reason = "these methods are used in other modules of integration tests, but compiler doesn't see it"
+)]
+
 pub const ROOT: &str = "./crafting_interpreters_test_files";
 
 pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {

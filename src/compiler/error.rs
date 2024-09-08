@@ -1,10 +1,9 @@
 use core::fmt;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::ops::DerefMut;
 
 use crate::common::Span;
-use crate::lexer::{LexerError, Token, TokenKind};
+use crate::lexer::{LexerError, TokenKind};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("Static errors")]
@@ -110,7 +109,7 @@ pub enum CompileErrorKind {
         ident: String,
     },
     UseOfLocalInItsOwnInitializer,
-    Msg(Cow<'static, str>)
+    Msg(Cow<'static, str>),
 }
 
 impl fmt::Display for CompileErrorKind {

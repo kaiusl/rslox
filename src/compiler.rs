@@ -1,14 +1,9 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
-use std::u16;
 
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
-use crate::disassembler::Disassembler;
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
 use crate::value::{InternedString, ObjFunction, Object, Value};
-use crate::Vm;
 
 use num_traits::FromPrimitive;
 
@@ -66,13 +61,12 @@ pub struct Upvalue {
 impl CompileUnit {
     pub fn new(ty: FunType, ident: Spanned<String>, parent: Option<Box<CompileUnit>>) -> Self {
         //locals[0] is for VM's internal use
-        let mut locals = Vec::with_capacity(1);
-        locals.push(Local {
+        let locals = vec![Local {
             ident,
             depth: 0,
             init: true,
             is_captured: false,
-        });
+        }];
         Self {
             bytecode: ByteCode::new(),
             locals,
@@ -88,6 +82,7 @@ impl CompileUnit {
 impl<'a> Compiler<'a> {
     pub const INIT_METHOD_NAME: &'static str = "init";
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(source: &'a str) -> Self {
         //let mut locals = Vec::with_capacity(1);
         // I don't think we need it atm, we'll add it later if we do need it
@@ -176,7 +171,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_class_decl(&mut self, class_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_class_decl(&mut self, _class_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let class_ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let class_ident = class_ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = class_ident.span.clone();
@@ -190,7 +185,7 @@ impl<'a> Compiler<'a> {
             self.current_class.take().map(Box::new),
         ));
 
-        if let Some(lt) = self.lexer.next_if(Token::is_lt)? {
+        if let Some(_lt) = self.lexer.next_if(Token::is_lt)? {
             let super_ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
             let super_ident = super_ident.map(|ident| ident.clone().try_into_ident().unwrap());
             self.compile_variable(&super_ident, super_ident.span.clone(), false)?;
@@ -212,11 +207,11 @@ impl<'a> Compiler<'a> {
             self.chunk.locals.push(local);
             self.compile_define_variable(Spanned::new(0, Span::new(0, 0, 0)));
 
-            self.compile_named_variable(&class_ident.item, span.clone(), false)?;
+            self.compile_named_variable(class_ident.item, span.clone(), false)?;
             self.emit(Instruction::Inherit, super_ident.span);
         }
 
-        self.compile_named_variable(&class_ident.item, span.clone(), false)?; // push class to the stack, so that methods can find it
+        self.compile_named_variable(class_ident.item, span.clone(), false)?; // push class to the stack, so that methods can find it
 
         let _lbrace = self.consume(Token::is_lbrace, || &[TokenKind::LBrace])?;
 
@@ -371,9 +366,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let (name, const_idx, ident_span) = self.compile_variable_name()?;
+        let (_, const_idx, ident_span) = self.compile_variable_name()?;
 
-        if let Some(eq) = self.lexer.next_if(Token::is_eq)? {
+        if let Some(_eq) = self.lexer.next_if(Token::is_eq)? {
             self.compile_expr()?;
         } else {
             self.emit(Instruction::Nil, var_kw.span.combine(&ident_span.clone()))
@@ -554,7 +549,7 @@ impl<'a> Compiler<'a> {
 
     fn compile_for_stmt(&mut self, for_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         self.enter_scope();
-        let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
+        let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         match self.lexer.peek()? {
             Some(tok) if tok.item == Token::Semicolon => {
                 self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
@@ -589,17 +584,17 @@ impl<'a> Compiler<'a> {
             let increment_start = self.chunk.bytecode.code.len();
             self.compile_expr()?;
             self.emit(Instruction::Pop, for_kw.span.clone());
-            let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
+            let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
-            self.emit_loop(loop_start, for_kw.span.clone());
+            self.emit_loop(loop_start, for_kw.span.clone())?;
             loop_start = increment_start;
             self.patch_jump(body_jump);
         } else {
-            let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
+            let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
         }
 
         self.compile_stmt()?;
-        self.emit_loop(loop_start, for_kw.span.clone());
+        self.emit_loop(loop_start, for_kw.span.clone())?;
 
         if let Some(exit_jump) = exit_jump {
             self.patch_jump(exit_jump);
@@ -613,14 +608,14 @@ impl<'a> Compiler<'a> {
 
     fn compile_while_stmt(&mut self, while_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         let loop_start = self.chunk.bytecode.code.len();
-        let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
+        let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
-        let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
+        let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
         let exit_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), while_kw.span.clone());
         self.emit(Instruction::Pop, while_kw.span.clone());
         self.compile_stmt()?;
-        self.emit_loop(loop_start, while_kw.span.clone());
+        self.emit_loop(loop_start, while_kw.span.clone())?;
 
         self.patch_jump(exit_jump);
         self.emit(Instruction::Pop, while_kw.span.clone());
@@ -635,12 +630,14 @@ impl<'a> Compiler<'a> {
         }
 
         self.emit(Instruction::Loop(offset as u16), span);
+
+        Ok(())
     }
 
     fn compile_if_stmt(&mut self, if_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
-        let lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
+        let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
-        let rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
+        let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
 
         let then_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), if_kw.span.clone());
         self.emit(Instruction::Pop, if_kw.span.clone());
@@ -651,7 +648,7 @@ impl<'a> Compiler<'a> {
         self.patch_jump(then_jump);
         self.emit(Instruction::Pop, if_kw.span.clone());
 
-        if let Some(else_kw) = self.lexer.next_if(Token::is_else)? {
+        if let Some(_else_kw) = self.lexer.next_if(Token::is_else)? {
             self.compile_stmt()?;
         }
         self.patch_jump(else_jump);
@@ -682,7 +679,7 @@ impl<'a> Compiler<'a> {
         dst.copy_from_slice(&(jump as u16).to_le_bytes());
     }
 
-    fn compile_block_stmt(&mut self, lbrace: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_block_stmt(&mut self, _lbrace: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
         self.enter_scope();
         self.compile_block()?;
         self.exit_scope();
@@ -789,8 +786,8 @@ impl<'a> Compiler<'a> {
 
     fn compile_grouping(
         &mut self,
-        lparen: Spanned<Token<'a>>,
-        can_assign: bool,
+        _lparen: Spanned<Token<'a>>,
+        _can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         self.compile_expr()?;
 
@@ -802,7 +799,7 @@ impl<'a> Compiler<'a> {
     fn compile_unary(
         &mut self,
         operator: Spanned<Token<'a>>,
-        can_assign: bool,
+        _can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         self.compile_precedence(Precedence::Unary)?; // operand
 
@@ -818,7 +815,7 @@ impl<'a> Compiler<'a> {
     fn compile_binary(
         &mut self,
         operator: Spanned<Token<'a>>,
-        can_assign: bool,
+        _can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         let precedence = Precedence::from_token(&operator);
 
@@ -879,6 +876,7 @@ impl<'a> Compiler<'a> {
         prefix: Spanned<Token<'a>>,
         can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
+        #[allow(clippy::unit_arg)]
         match prefix.item {
             Token::Number { value, .. } => self
                 .compile_constant(Value::Number(value), prefix.span)
@@ -913,7 +911,7 @@ impl<'a> Compiler<'a> {
             return Err(err.into());
         }
 
-        let dot = self.consume(Token::is_dot, || &[TokenKind::Dot])?;
+        let _dot = self.consume(Token::is_dot, || &[TokenKind::Dot])?;
         let name = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let name = name.map(|name| name.clone().try_into_ident().unwrap());
         let name_const_idx = self.compile_ident_constant(name.map(|name| name.to_string()))?;
@@ -982,7 +980,7 @@ impl<'a> Compiler<'a> {
         };
 
         if can_assign {
-            if let Some(tok) = self.lexer.next_if(Token::is_eq)? {
+            if let Some(_tok) = self.lexer.next_if(Token::is_eq)? {
                 self.compile_expr()?;
                 self.emit(set, span);
 
@@ -1126,7 +1124,7 @@ impl<'a> Compiler<'a> {
 
     fn compile_dot(
         &mut self,
-        dot: Spanned<Token<'a>>,
+        _dot: Spanned<Token<'a>>,
         can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
@@ -1135,7 +1133,7 @@ impl<'a> Compiler<'a> {
 
         let maybe_eq = self.lexer.next_if(Token::is_eq)?;
         if can_assign && maybe_eq.is_some() {
-            let eq = maybe_eq.unwrap();
+            let _eq = maybe_eq.unwrap();
             self.compile_expr()?;
             self.emit(Instruction::SetProperty(name_const_idx), ident.span);
         } else if let Some(lparen) = self.lexer.next_if(Token::is_lparen)? {
@@ -1151,7 +1149,7 @@ impl<'a> Compiler<'a> {
     fn compile_call(
         &mut self,
         lparen: Spanned<Token<'a>>,
-        can_assign: bool,
+        _can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         let arg_count = self.compile_arg_list()?;
         self.emit(Instruction::Call(arg_count), lparen.span);
@@ -1183,7 +1181,7 @@ impl<'a> Compiler<'a> {
     fn compile_and(
         &mut self,
         and: Spanned<Token<'a>>,
-        can_assign: bool,
+        _can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         let end_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), and.span.clone());
         self.emit(Instruction::Pop, and.span);
@@ -1196,7 +1194,7 @@ impl<'a> Compiler<'a> {
     fn compile_or(
         &mut self,
         or: Spanned<Token<'a>>,
-        can_assign: bool,
+        _can_assign: bool,
     ) -> Result<(), StaticError<'a>> {
         let else_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), or.span.clone());
         let end_jump = self.emit_jump(Instruction::Jump(u16::MAX), or.span.clone());

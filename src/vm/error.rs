@@ -1,7 +1,6 @@
 use core::fmt;
 use std::borrow::Cow;
 
-use crate::common::Span;
 use crate::compiler::error::StaticError;
 use crate::value::InternedString;
 

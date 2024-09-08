@@ -17,6 +17,10 @@ rstest = "0.22.0"
 
 [lints.rust]
 rust_2018_idioms = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+new_without_default = "allow"
 
 [features]
 debug_trace = []

@@ -4,8 +4,7 @@ use std::rc::Rc;
 use std::{fmt, mem};
 
 use crate::common::Span;
-use crate::disassembler::{Disassembler, DisassemblerError};
-use crate::value::Value;
+use crate::disassembler::DisassemblerError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteCode {
