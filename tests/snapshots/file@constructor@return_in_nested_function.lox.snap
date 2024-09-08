@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init() {\n    fun init() {\n      return \"bar\";\n    }\n    print init(); // expect: bar\n  }\n}\n\nprint Foo(); // expect: Foo instance\n"
+input_file: crafting_interpreters_test_files/constructor/return_in_nested_function.lox
+---
+OUT: 
+bar
+<instance Foo>
+
+===
+ERR:

@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nvar foo = Foo();\nprint foo; // expect: Foo instance\n"
+input_file: crafting_interpreters_test_files/constructor/default.lox
+---
+OUT: 
+<instance Foo>
+
+===
+ERR:

@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nFoo().unknown(); // expect runtime error: Undefined property 'unknown'.\n"
+input_file: crafting_interpreters_test_files/method/not_found.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined property `unknown`

@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  getClosure() {\n    fun f() {\n      fun g() {\n        fun h() {\n          return this.toString();\n        }\n        return h;\n      }\n      return g;\n    }\n    return f;\n  }\n\n  toString() { return \"Foo\"; }\n}\n\nvar closure = Foo().getClosure();\nprint closure()()(); // expect: Foo\n"
+input_file: crafting_interpreters_test_files/this/nested_closure.lox
+---
+OUT: 
+Foo
+
+===
+ERR:

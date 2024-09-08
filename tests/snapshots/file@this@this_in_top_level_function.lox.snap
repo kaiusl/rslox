@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "fun foo() {\n  this; // Error at 'this': Can't use 'this' outside of a class.\n}\n"
+input_file: crafting_interpreters_test_files/this/this_in_top_level_function.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × can't use 'this' outside of a class
+   ╭─[2:3]
+ 1 │ fun foo() {
+ 2 │   this; // Error at 'this': Can't use 'this' outside of a class.
+   ·   ──┬─
+   ·     ╰── here
+ 3 │ }
+   ╰────

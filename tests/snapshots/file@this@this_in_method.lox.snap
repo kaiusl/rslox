@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  bar() { return this; }\n  baz() { return \"baz\"; }\n}\n\nprint Foo().bar().baz(); // expect: baz\n"
+input_file: crafting_interpreters_test_files/this/this_in_method.lox
+---
+OUT: 
+baz
+
+===
+ERR:

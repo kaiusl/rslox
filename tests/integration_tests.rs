@@ -237,6 +237,22 @@ test_dir!(
 
 
 test_dir!(
+    constructor;
+    return_value,
+    return_in_nested_function,
+    default,
+    default_arguments,
+    call_init_explicitly,
+    early_return,
+    call_init_early_return,
+    arguments,
+    missing_arguments,
+    extra_arguments,
+    init_not_method,
+);
+
+
+test_dir!(
     field;
     get_on_class,
     get_on_function,
@@ -279,6 +295,31 @@ test_dir!(
     literals,
     nan_equality,
     trailing_dot,
+);
+
+
+test_dir!(
+    method;
+    empty_block,
+    too_many_parameters,
+    refer_to_name,
+    arity,
+    print_bound_method,
+    too_many_arguments,
+    missing_arguments,
+    not_found,
+    extra_arguments,
+);
+
+
+test_dir!(
+    this;
+    nested_closure,
+    nested_class,
+    this_at_top_level,
+    closure,
+    this_in_method,
+    this_in_top_level_function,
 );
 
 

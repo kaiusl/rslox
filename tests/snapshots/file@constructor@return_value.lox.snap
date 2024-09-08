@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init() {\n    return \"result\"; // Error at 'return': Can't return a value from an initializer.\n  }\n}\n"
+input_file: crafting_interpreters_test_files/constructor/return_value.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × can't return a value from an initializer
+   ╭─[3:5]
+ 2 │   init() {
+ 3 │     return "result"; // Error at 'return': Can't return a value from an initializer.
+   ·     ───┬──
+   ·        ╰── here
+ 4 │   }
+   ╰────

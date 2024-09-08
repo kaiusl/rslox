@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init() {\n    print \"init\";\n    return;\n    print \"nope\";\n  }\n}\n\nvar foo = Foo(); // expect: init\nprint foo.init(); // expect: init\n// expect: Foo instance\n"
+input_file: crafting_interpreters_test_files/constructor/call_init_early_return.lox
+---
+OUT: 
+init
+init
+<instance Foo>
+
+===
+ERR:

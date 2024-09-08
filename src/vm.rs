@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
+use crate::compiler::Compiler;
 use crate::disassembler::Disassembler;
 use crate::value::{
     InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction, ObjInstance,
@@ -62,7 +63,6 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             #[cfg(feature = "debug_trace")]
             disassembler,
         };
-
         vm.define_native("clock", Self::native_clock);
 
         vm
@@ -549,12 +549,24 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 Ok(())
             }
             Value::Object(Object::Class(cls)) => {
-                let instance = ObjInstance::new(cls);
+                let instance = ObjInstance::new(Rc::clone(&cls));
 
                 let instance = Value::new_object(Object::Instance(Rc::new(RefCell::new(instance))));
-                self.stack
-                    .truncate(self.stack.len() - arg_count as usize - 1);
-                self.stack.push(instance);
+                let receiver_slot = self.stack.len() - arg_count as usize - 1;
+                self.stack[receiver_slot] = instance.clone();
+                let borrow = cls.borrow();
+                if let Some(initializer) = borrow.methods.get(Compiler::INIT_METHOD_NAME) {
+                    self.call_closure(initializer, arg_count)?;
+                } else if arg_count != 0 {
+                    let kind = RuntimeErrorKind::Msg(
+                        format!("expected 0 arguments but got {}", arg_count).into(),
+                    );
+                    return Err(self.runtime_error(kind, 2));
+                }
+
+                // self.stack
+                //     .truncate(self.stack.len() - arg_count as usize - 1);
+                // self.stack.push(instance);
                 Ok(())
             }
             Value::Object(Object::BoundMethod(method)) => {

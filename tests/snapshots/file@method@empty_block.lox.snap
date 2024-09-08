@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  bar() {}\n}\n\nprint Foo().bar(); // expect: nil\n"
+input_file: crafting_interpreters_test_files/method/empty_block.lox
+---
+OUT: 
+nil
+
+===
+ERR:

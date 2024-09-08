@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "class Outer {\n  method() {\n    print this; // expect: Outer instance\n\n    fun f() {\n      print this; // expect: Outer instance\n\n      class Inner {\n        method() {\n          print this; // expect: Inner instance\n        }\n      }\n\n      Inner().method();\n    }\n    f();\n  }\n}\n\nOuter().method();\n"
+input_file: crafting_interpreters_test_files/this/nested_class.lox
+---
+OUT: 
+<instance Outer>
+<instance Outer>
+<instance Inner>
+
+===
+ERR:

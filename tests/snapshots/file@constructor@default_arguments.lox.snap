@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\nvar foo = Foo(1, 2, 3); // expect runtime error: Expected 0 arguments but got 3.\n"
+input_file: crafting_interpreters_test_files/constructor/default_arguments.lox
+---
+OUT: 
+
+===
+ERR: 
+  × expected 0 arguments but got 3
+   ╭─[3:14]
+ 2 │ 
+ 3 │ var foo = Foo(1, 2, 3); // expect runtime error: Expected 0 arguments but got 3.
+   ·              ┬
+   ·              ╰── here
+   ╰────

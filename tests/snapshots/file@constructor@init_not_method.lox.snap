@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init(arg) {\n    print \"Foo.init(\" + arg + \")\";\n    this.field = \"init\";\n  }\n}\n\nfun init() {\n  print \"not initializer\";\n}\n\ninit(); // expect: not initializer\n"
+input_file: crafting_interpreters_test_files/constructor/init_not_method.lox
+---
+OUT: 
+not initializer
+
+===
+ERR:

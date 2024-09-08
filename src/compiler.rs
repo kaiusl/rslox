@@ -8,6 +8,7 @@ use crate::common::{Span, Spanned};
 use crate::disassembler::Disassembler;
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
 use crate::value::{InternedString, ObjFunction, Object, Value};
+use crate::Vm;
 
 use num_traits::FromPrimitive;
 
@@ -21,6 +22,7 @@ pub enum FunType {
     Function,
     Script,
     Method,
+    Initializer,
 }
 
 pub struct Compiler<'a> {
@@ -80,6 +82,8 @@ impl CompileUnit {
 }
 
 impl<'a> Compiler<'a> {
+    pub const INIT_METHOD_NAME: &'static str = "init";
+
     pub fn from_str(source: &'a str) -> Self {
         //let mut locals = Vec::with_capacity(1);
         // I don't think we need it atm, we'll add it later if we do need it
@@ -212,7 +216,14 @@ impl<'a> Compiler<'a> {
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = ident.span.clone();
         let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
-        self.compile_function(None, ident.map(|ident| ident.to_string()), FunType::Method)?;
+
+        let fun_type = if ident.item == Self::INIT_METHOD_NAME {
+            FunType::Initializer
+        } else {
+            FunType::Method
+        };
+
+        self.compile_function(None, ident.map(|ident| ident.to_string()), fun_type)?;
         self.emit(Instruction::Method(const_idx), span.clone());
 
         Ok(())
@@ -239,11 +250,12 @@ impl<'a> Compiler<'a> {
         name: Spanned<String>,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
-        let unit_name = if fun_type == FunType::Method {
+        let unit_name = if matches!(fun_type, FunType::Method | FunType::Initializer) {
             "this".into()
         } else {
             String::new()
         };
+
         let prev_chunk = std::mem::replace(
             &mut self.chunk,
             CompileUnit::new(
@@ -286,7 +298,11 @@ impl<'a> Compiler<'a> {
 
         // emit return nil in case the block does not have explicit return,
         // if it has there instructions simply will not be executed
-        self.emit(Instruction::Nil, lbrace.span.clone());
+        if fun_type == FunType::Initializer {
+            self.emit(Instruction::GetLocal(0), lbrace.span.clone());
+        } else {
+            self.emit(Instruction::Nil, lbrace.span.clone());
+        }
         self.emit(Instruction::Return, lbrace.span.clone());
 
         self.exit_scope();
@@ -481,9 +497,19 @@ impl<'a> Compiler<'a> {
         }
 
         if let Some(semicolon) = self.lexer.next_if(Token::is_semicolon)? {
-            self.emit(Instruction::Nil, semicolon.span.clone());
+            if self.chunk.fun_type == FunType::Initializer {
+                self.emit(Instruction::GetLocal(0), semicolon.span.clone());
+            } else {
+                self.emit(Instruction::Nil, semicolon.span.clone());
+            }
             self.emit(Instruction::Return, semicolon.span);
         } else {
+            if self.chunk.fun_type == FunType::Initializer {
+                let kind = CompileErrorKind::Msg("can't return a value from an initializer".into());
+                let err = CompileError::new(kind, return_kw.span);
+                return Err(err.into());
+            }
+
             self.compile_expr()?;
             let _semicolon = self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
             self.emit(Instruction::Return, return_kw.span);

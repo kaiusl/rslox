@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  method0() { return \"no args\"; }\n  method1(a) { return a; }\n  method2(a, b) { return a + b; }\n  method3(a, b, c) { return a + b + c; }\n  method4(a, b, c, d) { return a + b + c + d; }\n  method5(a, b, c, d, e) { return a + b + c + d + e; }\n  method6(a, b, c, d, e, f) { return a + b + c + d + e + f; }\n  method7(a, b, c, d, e, f, g) { return a + b + c + d + e + f + g; }\n  method8(a, b, c, d, e, f, g, h) { return a + b + c + d + e + f + g + h; }\n}\n\nvar foo = Foo();\nprint foo.method0(); // expect: no args\nprint foo.method1(1); // expect: 1\nprint foo.method2(1, 2); // expect: 3\nprint foo.method3(1, 2, 3); // expect: 6\nprint foo.method4(1, 2, 3, 4); // expect: 10\nprint foo.method5(1, 2, 3, 4, 5); // expect: 15\nprint foo.method6(1, 2, 3, 4, 5, 6); // expect: 21\nprint foo.method7(1, 2, 3, 4, 5, 6, 7); // expect: 28\nprint foo.method8(1, 2, 3, 4, 5, 6, 7, 8); // expect: 36\n"
+input_file: crafting_interpreters_test_files/method/arity.lox
+---
+OUT: 
+no args
+1
+3
+6
+10
+15
+21
+28
+36
+
+===
+ERR:

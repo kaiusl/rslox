@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  method() {\n    print method; // expect runtime error: Undefined variable 'method'.\n  }\n}\n\nFoo().method();\n"
+input_file: crafting_interpreters_test_files/method/refer_to_name.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined variable `method`
+   ╭─[3:11]
+ 2 │   method() {
+ 3 │     print method; // expect runtime error: Undefined variable 'method'.
+   ·           ───┬──
+   ·              ╰── here
+ 4 │   }
+   ╰────

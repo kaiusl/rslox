@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  method() { }\n}\nvar foo = Foo();\nprint foo.method; // expect: <fn method>\n"
+input_file: crafting_interpreters_test_files/method/print_bound_method.lox
+---
+OUT: 
+<closure method>
+
+===
+ERR:

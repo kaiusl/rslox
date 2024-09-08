@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init(a, b) {\n    print \"init\"; // expect: init\n    this.a = a;\n    this.b = b;\n  }\n}\n\nvar foo = Foo(1, 2);\nprint foo.a; // expect: 1\nprint foo.b; // expect: 2\n"
+input_file: crafting_interpreters_test_files/constructor/arguments.lox
+---
+OUT: 
+init
+1
+2
+
+===
+ERR:

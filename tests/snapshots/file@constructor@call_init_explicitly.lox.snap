@@ -1,0 +1,13 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init(arg) {\n    print \"Foo.init(\" + arg + \")\";\n    this.field = \"init\";\n  }\n}\n\nvar foo = Foo(\"one\"); // expect: Foo.init(one)\nfoo.field = \"field\";\n\nvar foo2 = foo.init(\"two\"); // expect: Foo.init(two)\nprint foo2; // expect: Foo instance\n\n// Make sure init() doesn't create a fresh instance.\nprint foo.field; // expect: init\n"
+input_file: crafting_interpreters_test_files/constructor/call_init_explicitly.lox
+---
+OUT: 
+Foo.init(one)
+Foo.init(two)
+<instance Foo>
+init
+
+===
+ERR:

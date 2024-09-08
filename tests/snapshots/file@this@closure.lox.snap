@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  getClosure() {\n    fun closure() {\n      return this.toString();\n    }\n    return closure;\n  }\n\n  toString() { return \"Foo\"; }\n}\n\nvar closure = Foo().getClosure();\nprint closure(); // expect: Foo\n"
+input_file: crafting_interpreters_test_files/this/closure.lox
+---
+OUT: 
+Foo
+
+===
+ERR:

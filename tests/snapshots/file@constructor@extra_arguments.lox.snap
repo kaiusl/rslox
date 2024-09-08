@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  init(a, b) {\n    this.a = a;\n    this.b = b;\n  }\n}\n\nvar foo = Foo(1, 2, 3, 4); // expect runtime error: Expected 2 arguments but got 4."
+input_file: crafting_interpreters_test_files/constructor/extra_arguments.lox
+---
+OUT: 
+
+===
+ERR: 
+  × wrong number of arguments, expected 2, got 4
+   ╭─[8:14]
+ 7 │ 
+ 8 │ var foo = Foo(1, 2, 3, 4); // expect runtime error: Expected 2 arguments but got 4.
+   ·              ┬
+   ·              ╰── here
+   ╰────
