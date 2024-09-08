@@ -623,10 +623,12 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn emit_loop(&mut self, loop_start: usize, span: Span) {
+    fn emit_loop(&mut self, loop_start: usize, span: Span) -> Result<(), StaticError<'a>> {
         let offset = self.chunk.bytecode.code.len() - loop_start + 3;
         if offset >= u16::MAX as usize {
-            todo!("Too long jump. Add another op to support more jumps.");
+            let kind = CompileErrorKind::Msg("Loop body too large".into());
+            let err = CompileError::new(kind, span);
+            return Err(err.into());
         }
 
         self.emit(Instruction::Loop(offset as u16), span);
@@ -776,7 +778,9 @@ impl<'a> Compiler<'a> {
     fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'a>> {
         let idx = self.add_constant(value);
         let Ok(idx) = u8::try_from(idx) else {
-            todo!("Too many constants. Add another op to support more constants.");
+            let kind = CompileErrorKind::Msg("too many constants".into());
+            let err = CompileError::new(kind, span);
+            return Err(err.into());
         };
 
         self.emit(Instruction::Constant(idx), span);

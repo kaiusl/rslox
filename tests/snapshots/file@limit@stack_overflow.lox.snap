@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "fun foo() {\n  var a1;\n  var a2;\n  var a3;\n  var a4;\n  var a5;\n  var a6;\n  var a7;\n  var a8;\n  var a9;\n  var a10;\n  var a11;\n  var a12;\n  var a13;\n  var a14;\n  var a15;\n  var a16;\n  foo(); // expect runtime error: Stack overflow.\n}\n\nfoo();\n"
+input_file: crafting_interpreters_test_files/limit/stack_overflow.lox
+---
+OUT: 
+
+===
+ERR: 
+  × stack overflow
+    ╭─[18:3]
+ 17 │   var a16;
+ 18 │   foo(); // expect runtime error: Stack overflow.
+    ·   ─┬─
+    ·    ╰── here
+ 19 │ }
+    ╰────
