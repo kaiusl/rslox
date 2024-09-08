@@ -1,6 +1,6 @@
 cargo build --release
 
-for path in "binary_trees" "equality" "fib" "instantiation" "invocation" "properties" "string_equality" "trees" "zoo_batch" "zoo"
+for path in "binary_trees" "equality" "fib" "instantiation" "invocation" "method_call" "properties" "string_equality" "trees" "zoo_batch" "zoo"
 do 
     echo ""
     echo $path
