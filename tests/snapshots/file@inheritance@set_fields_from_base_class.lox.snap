@@ -1,0 +1,15 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  foo(a, b) {\n    this.field1 = a;\n    this.field2 = b;\n  }\n\n  fooPrint() {\n    print this.field1;\n    print this.field2;\n  }\n}\n\nclass Bar < Foo {\n  bar(a, b) {\n    this.field1 = a;\n    this.field2 = b;\n  }\n\n  barPrint() {\n    print this.field1;\n    print this.field2;\n  }\n}\n\nvar bar = Bar();\nbar.foo(\"foo 1\", \"foo 2\");\nbar.fooPrint();\n// expect: foo 1\n// expect: foo 2\n\nbar.bar(\"bar 1\", \"bar 2\");\nbar.barPrint();\n// expect: bar 1\n// expect: bar 2\n\nbar.fooPrint();\n// expect: bar 1\n// expect: bar 2\n"
+input_file: crafting_interpreters_test_files/inheritance/set_fields_from_base_class.lox
+---
+OUT: 
+foo 1
+foo 2
+bar 1
+bar 2
+bar 1
+bar 2
+
+===
+ERR:

@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class A {\n  init(param) {\n    this.field = param;\n  }\n\n  test() {\n    print this.field;\n  }\n}\n\nclass B < A {}\n\nvar b = B(\"value\");\nb.test(); // expect: value\n"
+input_file: crafting_interpreters_test_files/inheritance/constructor.lox
+---
+OUT: 
+value
+
+===
+ERR:

@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "class A {}\n\nclass B < A {\n  method() {\n    super.; // Error at ';': Expect superclass method name.\n  }\n}\n"
+input_file: crafting_interpreters_test_files/super/super_without_name.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected Ident, found ';'
+   ╭─[5:11]
+ 4 │   method() {
+ 5 │     super.; // Error at ';': Expect superclass method name.
+   ·           ┬
+   ·           ╰── here
+ 6 │   }
+   ╰────

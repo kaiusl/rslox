@@ -1,0 +1,12 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {\n  methodOnFoo() { print \"foo\"; }\n  override() { print \"foo\"; }\n}\n\nclass Bar < Foo {\n  methodOnBar() { print \"bar\"; }\n  override() { print \"bar\"; }\n}\n\nvar bar = Bar();\nbar.methodOnFoo(); // expect: foo\nbar.methodOnBar(); // expect: bar\nbar.override(); // expect: bar\n"
+input_file: crafting_interpreters_test_files/inheritance/inherit_methods.lox
+---
+OUT: 
+foo
+bar
+bar
+
+===
+ERR:

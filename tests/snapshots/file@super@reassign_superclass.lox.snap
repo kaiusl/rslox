@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  method() {\n    print \"Base.method()\";\n  }\n}\n\nclass Derived < Base {\n  method() {\n    super.method();\n  }\n}\n\nclass OtherBase {\n  method() {\n    print \"OtherBase.method()\";\n  }\n}\n\nvar derived = Derived();\nderived.method(); // expect: Base.method()\nBase = OtherBase;\nderived.method(); // expect: Base.method()\n"
+input_file: crafting_interpreters_test_files/super/reassign_superclass.lox
+---
+OUT: 
+Base.method()
+Base.method()
+
+===
+ERR:

@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "class A {\n  method() {}\n}\n\nclass B < A {\n  method() {\n    // [line 8] Error at ')': Expect '.' after 'super'.\n    (super).method();\n  }\n}\n"
+input_file: crafting_interpreters_test_files/super/parenthesized.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected Dot, found ')'
+   ╭─[8:11]
+ 7 │     // [line 8] Error at ')': Expect '.' after 'super'.
+ 8 │     (super).method();
+   ·           ┬
+   ·           ╰── here
+ 9 │   }
+   ╰────

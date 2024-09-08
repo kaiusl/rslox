@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  foo() {\n    print \"Base.foo()\";\n  }\n}\n\nclass Derived < Base {\n  foo() {\n    print \"Derived.foo()\";\n    super.foo();\n  }\n}\n\nDerived().foo();\n// expect: Derived.foo()\n// expect: Base.foo()\n"
+input_file: crafting_interpreters_test_files/super/call_same_method.lox
+---
+OUT: 
+Derived.foo()
+Base.foo()
+
+===
+ERR:

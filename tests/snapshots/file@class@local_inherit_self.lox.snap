@@ -9,11 +9,11 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected LBrace, found '<'
-   ╭─[2:13]
+Error:   × a class can't inherit from itself
+   ╭─[2:15]
  1 │ {
  2 │   class Foo < Foo {} // Error at 'Foo': A class can't inherit from itself.
-   ·             ┬
-   ·             ╰── here
+   ·               ─┬─
+   ·                ╰── here
  3 │ }
    ╰────

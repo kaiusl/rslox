@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  init(a, b) {\n    print \"Base.init(\" + a + \", \" + b + \")\";\n  }\n}\n\nclass Derived < Base {\n  init() {\n    print \"Derived.init()\";\n    super.init(\"a\", \"b\");\n  }\n}\n\nDerived();\n// expect: Derived.init()\n// expect: Base.init(a, b)\n"
+input_file: crafting_interpreters_test_files/super/constructor.lox
+---
+OUT: 
+Derived.init()
+Base.init(a, b)
+
+===
+ERR:

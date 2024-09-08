@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class A {\n  say() {\n    print \"A\";\n  }\n}\n\nclass B < A {\n  test() {\n    super.say();\n  }\n\n  say() {\n    print \"B\";\n  }\n}\n\nclass C < B {\n  say() {\n    print \"C\";\n  }\n}\n\nC().test(); // expect: A\n"
+input_file: crafting_interpreters_test_files/super/super_in_inherited_method.lox
+---
+OUT: 
+A
+
+===
+ERR:

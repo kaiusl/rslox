@@ -4,24 +4,7 @@ description: "class A {}\n\nfun f() {\n  class B < A {}\n  return B;\n}\n\nprint
 input_file: crafting_interpreters_test_files/class/local_inherit_other.lox
 ---
 OUT: 
+<class B>
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected LBrace, found '<'
-   ╭─[4:11]
- 3 │ fun f() {
- 4 │   class B < A {}
-   ·           ┬
-   ·           ╰── here
- 5 │   return B;
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found '}'
-   ╭─[6:1]
- 5 │   return B;
- 6 │ }
-   · ┬
-   · ╰── here
- 7 │ 
-   ╰────
+ERR:

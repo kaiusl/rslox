@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Base {}\n\nclass Derived < Base {\n  foo() {\n    super.doesNotExist(1); // expect runtime error: Undefined property 'doesNotExist'.\n  }\n}\n\nDerived().foo();\n"
+input_file: crafting_interpreters_test_files/super/no_superclass_method.lox
+---
+OUT: 
+
+===
+ERR: 
+  × undefined property `doesNotExist`

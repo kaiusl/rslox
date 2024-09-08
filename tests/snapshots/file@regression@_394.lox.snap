@@ -4,23 +4,7 @@ description: "{\n  class A {}\n  class B < A {}\n  print B; // expect: B\n}\n"
 input_file: crafting_interpreters_test_files/regression/_394.lox
 ---
 OUT: 
+<class B>
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × expected LBrace, found '<'
-   ╭─[3:11]
- 2 │   class A {}
- 3 │   class B < A {}
-   ·           ┬
-   ·           ╰── here
- 4 │   print B; // expect: B
-   ╰────
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found '}'
-   ╭─[5:1]
- 4 │   print B; // expect: B
- 5 │ }
-   · ┬
-   · ╰── here
-   ╰────
+ERR:

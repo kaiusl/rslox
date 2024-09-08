@@ -9,7 +9,7 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found 'var'
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this, super', found 'var'
    ╭─[2:22]
  1 │ // [line 2] Error at 'var': Expect expression.
  2 │ if (true) "ok"; else var foo;

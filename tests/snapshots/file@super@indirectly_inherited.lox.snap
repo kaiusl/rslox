@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "class A {\n  foo() {\n    print \"A.foo()\";\n  }\n}\n\nclass B < A {}\n\nclass C < B {\n  foo() {\n    print \"C.foo()\";\n    super.foo();\n  }\n}\n\nC().foo();\n// expect: C.foo()\n// expect: A.foo()\n"
+input_file: crafting_interpreters_test_files/super/indirectly_inherited.lox
+---
+OUT: 
+C.foo()
+A.foo()
+
+===
+ERR:

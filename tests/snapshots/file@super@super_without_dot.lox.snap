@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "class A {}\n\nclass B < A {\n  method() {\n    // [line 6] Error at ';': Expect '.' after 'super'.\n    super;\n  }\n}\n"
+input_file: crafting_interpreters_test_files/super/super_without_dot.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected Dot, found ';'
+   ╭─[6:10]
+ 5 │     // [line 6] Error at ';': Expect '.' after 'super'.
+ 6 │     super;
+   ·          ┬
+   ·          ╰── here
+ 7 │   }
+   ╰────

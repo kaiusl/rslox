@@ -1,0 +1,19 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  foo() {\n    super.doesNotExist; // Error at 'super': Can't use 'super' in a class with no superclass.\n  }\n}\n\nBase().foo();\n"
+input_file: crafting_interpreters_test_files/super/no_superclass_bind.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × can't use 'super' in a class with no superclass
+   ╭─[3:5]
+ 2 │   foo() {
+ 3 │     super.doesNotExist; // Error at 'super': Can't use 'super' in a class with no superclass.
+   ·     ──┬──
+   ·       ╰── here
+ 4 │   }
+   ╰────

@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "var Nil = nil;\nclass Foo < Nil {} // expect runtime error: Superclass must be a class.\n"
+input_file: crafting_interpreters_test_files/inheritance/inherit_from_nil.lox
+---
+OUT: 
+
+===
+ERR: 
+  × superclass must be a class
+   ╭─[2:13]
+ 1 │ var Nil = nil;
+ 2 │ class Foo < Nil {} // expect runtime error: Superclass must be a class.
+   ·             ─┬─
+   ·              ╰── here
+   ╰────

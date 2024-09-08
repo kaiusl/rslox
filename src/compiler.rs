@@ -41,7 +41,10 @@ pub struct ClassCompileUnit {
 
 impl ClassCompileUnit {
     pub fn new(parent: Option<Box<ClassCompileUnit>>) -> Self {
-        Self { parent, has_superclass: false }
+        Self {
+            parent,
+            has_superclass: false,
+        }
     }
 }
 
@@ -192,7 +195,7 @@ impl<'a> Compiler<'a> {
             let super_ident = super_ident.map(|ident| ident.clone().try_into_ident().unwrap());
             self.compile_variable(&super_ident, super_ident.span.clone(), false)?;
 
-            if super_ident == class_ident {
+            if super_ident.item == class_ident.item {
                 let kind = CompileErrorKind::Msg("a class can't inherit from itself".into());
                 let err = CompileError::new(kind, super_ident.span);
                 return Err(err.into());
@@ -208,8 +211,6 @@ impl<'a> Compiler<'a> {
             };
             self.chunk.locals.push(local);
             self.compile_define_variable(Spanned::new(0, Span::new(0, 0, 0)));
-
-
 
             self.compile_named_variable(&class_ident.item, span.clone(), false)?;
             self.emit(Instruction::Inherit, super_ident.span);
@@ -906,11 +907,11 @@ impl<'a> Compiler<'a> {
             let err = CompileError::new(kind, super_kw.span);
             return Err(err.into());
         } else if !self.current_class.as_ref().unwrap().has_superclass {
-            let kind = CompileErrorKind::Msg("can't use 'super' in a class with no superclass".into());
+            let kind =
+                CompileErrorKind::Msg("can't use 'super' in a class with no superclass".into());
             let err = CompileError::new(kind, super_kw.span);
             return Err(err.into());
         }
-
 
         let dot = self.consume(Token::is_dot, || &[TokenKind::Dot])?;
         let name = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
@@ -918,7 +919,7 @@ impl<'a> Compiler<'a> {
         let name_const_idx = self.compile_ident_constant(name.map(|name| name.to_string()))?;
 
         self.compile_named_variable("this", Span::new(0, 0, 0), false)?;
-        self.compile_named_variable("super", Span::new(0,0,0), false)?;
+        self.compile_named_variable("super", Span::new(0, 0, 0), false)?;
 
         self.emit(Instruction::GetSuper(name_const_idx), super_kw.span);
 
@@ -1077,7 +1078,9 @@ impl<'a> Compiler<'a> {
                 | Token::Bang
                 | Token::String { .. }
                 | Token::Ident(_)
-                | Token::Keyword(Keyword::Nil | Keyword::True | Keyword::False | Keyword::This | Keyword::Super)
+                | Token::Keyword(
+                    Keyword::Nil | Keyword::True | Keyword::False | Keyword::This | Keyword::Super
+                )
         )
     }
 
@@ -1093,10 +1096,9 @@ impl<'a> Compiler<'a> {
             TokenKind::Keyword(Keyword::True),
             TokenKind::Keyword(Keyword::False),
             TokenKind::Keyword(Keyword::This),
-            TokenKind::Keyword(Keyword::Super)
+            TokenKind::Keyword(Keyword::Super),
         ]
     }
-
 
     fn compile_infix(
         &mut self,

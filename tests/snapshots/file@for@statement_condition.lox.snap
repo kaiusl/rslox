@@ -9,7 +9,7 @@ OUT:
 ERR: 
   × Static errors
 
-Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this', found '{'
+Error:   × expected one of the following: 'number, (, -, !, string, ident, nil, true, false, this, super', found '{'
    ╭─[3:17]
  2 │ // [line 3] Error at ')': Expect ';' after expression.
  3 │ for (var a = 1; {}; a = a + 1) {}

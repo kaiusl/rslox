@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  toString() { return \"Base\"; }\n}\n\nclass Derived < Base {\n  getClosure() {\n    fun closure() {\n      return super.toString();\n    }\n    return closure;\n  }\n\n  toString() { return \"Derived\"; }\n}\n\nvar closure = Derived().getClosure();\nprint closure(); // expect: Base\n"
+input_file: crafting_interpreters_test_files/super/closure.lox
+---
+OUT: 
+Base
+
+===
+ERR:

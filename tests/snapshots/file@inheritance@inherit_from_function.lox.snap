@@ -1,0 +1,16 @@
+---
+source: tests/common/mod.rs
+description: "fun foo() {}\n\nclass Subclass < foo {} // expect runtime error: Superclass must be a class.\n"
+input_file: crafting_interpreters_test_files/inheritance/inherit_from_function.lox
+---
+OUT: 
+
+===
+ERR: 
+  × superclass must be a class
+   ╭─[3:18]
+ 2 │ 
+ 3 │ class Subclass < foo {} // expect runtime error: Superclass must be a class.
+   ·                  ─┬─
+   ·                   ╰── here
+   ╰────

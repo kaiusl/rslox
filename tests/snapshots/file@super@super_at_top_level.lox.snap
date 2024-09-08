@@ -1,0 +1,25 @@
+---
+source: tests/common/mod.rs
+description: "super.foo(\"bar\"); // Error at 'super': Can't use 'super' outside of a class.\nsuper.foo; // Error at 'super': Can't use 'super' outside of a class."
+input_file: crafting_interpreters_test_files/super/super_at_top_level.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × can't use 'super' outside of a class
+   ╭─[1:1]
+ 1 │ super.foo("bar"); // Error at 'super': Can't use 'super' outside of a class.
+   · ──┬──
+   ·   ╰── here
+ 2 │ super.foo; // Error at 'super': Can't use 'super' outside of a class.
+   ╰────
+Error:   × can't use 'super' outside of a class
+   ╭─[2:1]
+ 1 │ super.foo("bar"); // Error at 'super': Can't use 'super' outside of a class.
+ 2 │ super.foo; // Error at 'super': Can't use 'super' outside of a class.
+   · ──┬──
+   ·   ╰── here
+   ╰────

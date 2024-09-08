@@ -1,0 +1,17 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  foo(a, b) {\n    print \"Base.foo(\" + a + \", \" + b + \")\";\n  }\n}\n\nclass Derived < Base {\n  foo() {\n    super.foo(1); // expect runtime error: Expected 2 arguments but got 1.\n  }\n}\n\nDerived().foo();\n"
+input_file: crafting_interpreters_test_files/super/missing_arguments.lox
+---
+OUT: 
+
+===
+ERR: 
+  × wrong number of arguments, expected 2, got 1
+    ╭─[9:14]
+  8 │   foo() {
+  9 │     super.foo(1); // expect runtime error: Expected 2 arguments but got 1.
+    ·              ┬
+    ·              ╰── here
+ 10 │   }
+    ╰────

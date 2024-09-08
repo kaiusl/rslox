@@ -1,0 +1,10 @@
+---
+source: tests/common/mod.rs
+description: "class A {\n  method(arg) {\n    print \"A.method(\" + arg + \")\";\n  }\n}\n\nclass B < A {\n  getClosure() {\n    return super.method;\n  }\n\n  method(arg) {\n    print \"B.method(\" + arg + \")\";\n  }\n}\n\n\nvar closure = B().getClosure();\nclosure(\"arg\"); // expect: A.method(arg)\n"
+input_file: crafting_interpreters_test_files/super/bound_method.lox
+---
+OUT: 
+A.method(arg)
+
+===
+ERR:

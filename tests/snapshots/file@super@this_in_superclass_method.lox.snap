@@ -1,0 +1,11 @@
+---
+source: tests/common/mod.rs
+description: "class Base {\n  init(a) {\n    this.a = a;\n  }\n}\n\nclass Derived < Base {\n  init(a, b) {\n    super.init(a);\n    this.b = b;\n  }\n}\n\nvar derived = Derived(\"a\", \"b\");\nprint derived.a; // expect: a\nprint derived.b; // expect: b\n"
+input_file: crafting_interpreters_test_files/super/this_in_superclass_method.lox
+---
+OUT: 
+a
+b
+
+===
+ERR:

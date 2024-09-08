@@ -1,0 +1,18 @@
+---
+source: tests/common/mod.rs
+description: "class Foo {}\n\n// [line 4] Error at '(': Expect superclass name.\nclass Bar < (Foo) {}\n"
+input_file: crafting_interpreters_test_files/inheritance/parenthesized_superclass.lox
+---
+OUT: 
+
+===
+ERR: 
+  × Static errors
+
+Error:   × expected Ident, found '('
+   ╭─[4:13]
+ 3 │ // [line 4] Error at '(': Expect superclass name.
+ 4 │ class Bar < (Foo) {}
+   ·             ┬
+   ·             ╰── here
+   ╰────

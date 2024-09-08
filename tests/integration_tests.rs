@@ -1,7 +1,6 @@
 mod common;
 use common::*;
 
-
 test_dir!(
     operator;
     add_num_nil,
@@ -39,7 +38,6 @@ test_dir!(
     divide_nonnum_num,
 );
 
-
 test_dir!(
     class;
     inherit_self,
@@ -51,6 +49,29 @@ test_dir!(
     inherited_method,
 );
 
+test_dir!(
+    super;
+    super_without_name,
+    call_other_method,
+    parenthesized,
+    super_in_closure_in_inherited_method,
+    no_superclass_call,
+    super_without_dot,
+    reassign_superclass,
+    no_superclass_method,
+    closure,
+    super_at_top_level,
+    constructor,
+    missing_arguments,
+    bound_method,
+    this_in_superclass_method,
+    indirectly_inherited,
+    super_in_top_level_function,
+    no_superclass_bind,
+    extra_arguments,
+    call_same_method,
+    super_in_inherited_method,
+);
 
 test_dir!(
     function;
@@ -70,7 +91,6 @@ test_dir!(
     extra_arguments,
 );
 
-
 test_dir!(
     return;
     after_while,
@@ -82,13 +102,11 @@ test_dir!(
     after_if,
 );
 
-
 test_dir!(
     block;
     scope,
     empty,
 );
-
 
 test_dir!(
     if;
@@ -104,7 +122,6 @@ test_dir!(
     if,
 );
 
-
 test_dir!(
     logical_operator;
     or_truth,
@@ -112,7 +129,6 @@ test_dir!(
     and,
     and_truth,
 );
-
 
 test_dir!(
     for;
@@ -129,7 +145,6 @@ test_dir!(
     scope,
 );
 
-
 test_dir!(
     comments;
     line_at_eof,
@@ -137,7 +152,6 @@ test_dir!(
     unicode,
     only_line_comment,
 );
-
 
 test_dir!(
     assignment;
@@ -152,12 +166,21 @@ test_dir!(
     global,
 );
 
-
 test_dir!(
     nil;
     literal,
 );
 
+test_dir!(
+    inheritance;
+    inherit_from_nil,
+    inherit_methods,
+    inherit_from_number,
+    set_fields_from_base_class,
+    parenthesized_superclass,
+    inherit_from_function,
+    constructor,
+);
 
 test_dir!(
     while;
@@ -169,7 +192,6 @@ test_dir!(
     return_closure,
     var_in_body,
 );
-
 
 test_dir!(
     variable;
@@ -197,13 +219,11 @@ test_dir!(
     in_middle_of_block,
 );
 
-
 test_dir!(
     regression;
     _40,
     _394,
 );
-
 
 test_dir!(
     bool;
@@ -211,12 +231,10 @@ test_dir!(
     not,
 );
 
-
 test_dir!(
     print;
     missing_argument,
 );
-
 
 test_dir!(
     closure;
@@ -235,7 +253,6 @@ test_dir!(
     unused_closure,
 );
 
-
 test_dir!(
     constructor;
     return_value,
@@ -250,7 +267,6 @@ test_dir!(
     extra_arguments,
     init_not_method,
 );
-
 
 test_dir!(
     field;
@@ -277,7 +293,6 @@ test_dir!(
     call_function_field,
 );
 
-
 test_dir!(
     call;
     object,
@@ -287,7 +302,6 @@ test_dir!(
     nil,
 );
 
-
 test_dir!(
     number;
     leading_dot,
@@ -296,7 +310,6 @@ test_dir!(
     nan_equality,
     trailing_dot,
 );
-
 
 test_dir!(
     method;
@@ -311,7 +324,6 @@ test_dir!(
     extra_arguments,
 );
 
-
 test_dir!(
     this;
     nested_closure,
@@ -322,7 +334,6 @@ test_dir!(
     this_in_top_level_function,
 );
 
-
 test_dir!(
     string;
     multiline,
@@ -331,9 +342,4 @@ test_dir!(
     unterminated,
 );
 
-
-test_dir!(
-    empty_file,
-    precedence,
-    unexpected_character,
-);
+test_dir!(empty_file, precedence, unexpected_character,);
