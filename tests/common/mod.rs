@@ -41,18 +41,21 @@ pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
         }
     }
 
-    settings.set_snapshot_suffix(suffix);
-    settings.set_input_file(path);
-    settings.set_description(src);
-    settings.set_prepend_module_to_snapshot(false);
-    settings.set_omit_expression(true);
-    settings.set_snapshot_path("../snapshots");
-    let _quard = settings.bind_to_scope();
-    insta::assert_snapshot!(format!(
-        "OUT: \n{}\n===\nERR: \n{}",
-        String::from_utf8(out).unwrap(),
-        String::from_utf8(outerr).unwrap()
-    ))
+    #[cfg(not(miri))]
+    {
+        settings.set_snapshot_suffix(suffix);
+        settings.set_input_file(path);
+        settings.set_description(src);
+        settings.set_prepend_module_to_snapshot(false);
+        settings.set_omit_expression(true);
+        settings.set_snapshot_path("../snapshots");
+        let _quard = settings.bind_to_scope();
+        insta::assert_snapshot!(format!(
+            "OUT: \n{}\n===\nERR: \n{}",
+            String::from_utf8(out).unwrap(),
+            String::from_utf8(outerr).unwrap()
+        ))
+    }
 }
 
 // Note that we append _ to the test name so that we can use Rust keywords as $file

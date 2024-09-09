@@ -211,10 +211,13 @@ mod tests {
         };
 
         let err = CompileError::new(kind, Span::from_len(0, 1, 1));
-        insta::assert_snapshot!(format!(
-            "{:?}",
-            miette::Error::from(err).with_source_code("1.2;")
-        ))
+        #[cfg(not(miri))]
+        {
+            insta::assert_snapshot!(format!(
+                "{:?}",
+                miette::Error::from(err).with_source_code("1.2;")
+            ))
+        }
     }
 
     #[test]
@@ -237,9 +240,12 @@ mod tests {
 
         let err = CompileError::new(kind, Span::from_len(0, 1, 1));
 
-        insta::assert_snapshot!(format!(
-            "{:?}",
-            miette::Error::from(err).with_source_code("1.2;")
-        ))
+        #[cfg(not(miri))]
+        {
+            insta::assert_snapshot!(format!(
+                "{:?}",
+                miette::Error::from(err).with_source_code("1.2;")
+            ))
+        }
     }
 }
