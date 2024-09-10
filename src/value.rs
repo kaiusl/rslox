@@ -204,7 +204,15 @@ pub enum WeakObject {
 
 impl PartialEq for WeakObject {
     fn eq(&self, other: &Self) -> bool {
-        todo!()
+        match (self, other) {
+            (Self::Function(l0), Self::Function(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::Closure(l0), Self::Closure(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::Upvalue(l0), Self::Upvalue(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::Class(l0), Self::Class(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::Instance(l0), Self::Instance(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::BoundMethod(l0), Self::BoundMethod(r0)) => l0.upgrade() == r0.upgrade(),
+            _ => false,
+        }
     }
 }
 
@@ -398,6 +406,11 @@ impl fmt::Display for ObjBoundMethod {
 
 impl ObjBoundMethod {
     pub fn new(receiver: Value, method: Rc<ObjClosure>) -> Self {
-        Self { receiver, method }
+        Self {
+            // A strong reference can cause cycles if the bound method is set as a field to the same instance
+            // It doesn't seem to break anything if we set it always as weak ref.
+            receiver: receiver.to_weak(),
+            method,
+        }
     }
 }
