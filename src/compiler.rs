@@ -4,6 +4,7 @@ use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
 use crate::value::{InternedString, ObjFunction, Object, Value};
+use crate::vm::STRING_INTERNER;
 
 use num_traits::FromPrimitive;
 
@@ -59,7 +60,11 @@ pub struct Upvalue {
 }
 
 impl CompileUnit {
-    pub fn new(ty: FunType, ident: Spanned<String>, parent: Option<Box<CompileUnit>>) -> Self {
+    pub fn new(
+        ty: FunType,
+        ident: Spanned<InternedString>,
+        parent: Option<Box<CompileUnit>>,
+    ) -> Self {
         //locals[0] is for VM's internal use
         let locals = vec![Local {
             ident,
@@ -99,7 +104,10 @@ impl<'a> Compiler<'a> {
             errors: StaticErrors::new(source),
             chunk: CompileUnit::new(
                 FunType::Script,
-                Spanned::new(String::from("this"), Span::from_len(0, 0, 0)),
+                Spanned::new(
+                    STRING_INTERNER.lock().unwrap().intern("this"),
+                    Span::from_len(0, 0, 0),
+                ),
                 None,
             ),
             current_class: None,
@@ -175,7 +183,7 @@ impl<'a> Compiler<'a> {
         let class_ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let class_ident = class_ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = class_ident.span.clone();
-        let const_idx = self.compile_ident_constant(class_ident.map(|ident| ident.to_string()))?;
+        let const_idx = self.compile_ident_constant(class_ident.clone())?;
         self.declare_variable(class_ident.clone())?;
 
         self.emit(Instruction::Class(const_idx), span.clone());
@@ -199,7 +207,10 @@ impl<'a> Compiler<'a> {
 
             self.enter_scope();
             let local = Local {
-                ident: Spanned::new("super".into(), Span::new(0, 0, 0)),
+                ident: Spanned::new(
+                    STRING_INTERNER.lock().unwrap().intern("super"),
+                    Span::new(0, 0, 0),
+                ),
                 depth: self.chunk.scope_depth,
                 init: false,
                 is_captured: false,
@@ -244,7 +255,7 @@ impl<'a> Compiler<'a> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = ident.span.clone();
-        let const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
+        let const_idx = self.compile_ident_constant(ident.clone())?;
 
         let fun_type = if ident.item == Self::INIT_METHOD_NAME {
             FunType::Initializer
@@ -252,7 +263,7 @@ impl<'a> Compiler<'a> {
             FunType::Method
         };
 
-        self.compile_function(None, ident.map(|ident| ident.to_string()), fun_type)?;
+        self.compile_function(None, ident, fun_type)?;
         self.emit(Instruction::Method(const_idx), span.clone());
 
         Ok(())
@@ -265,7 +276,7 @@ impl<'a> Compiler<'a> {
         }
         self.compile_function(
             Some(fun_kw),
-            Spanned::new(ident.to_string(), ident_span.clone()),
+            Spanned::new(ident, ident_span.clone()),
             FunType::Function,
         )?;
         self.compile_define_variable(Spanned::new(idx, ident_span));
@@ -276,13 +287,13 @@ impl<'a> Compiler<'a> {
     fn compile_function(
         &mut self,
         fun_kw: Option<Spanned<Token<'a>>>,
-        name: Spanned<String>,
+        name: Spanned<&str>,
         fun_type: FunType,
     ) -> Result<(), StaticError<'a>> {
         let unit_name = if matches!(fun_type, FunType::Method | FunType::Initializer) {
-            "this".into()
+            STRING_INTERNER.lock().unwrap().intern("this")
         } else {
-            String::new()
+            STRING_INTERNER.lock().unwrap().intern("")
         };
 
         let prev_chunk = std::mem::replace(
@@ -339,7 +350,7 @@ impl<'a> Compiler<'a> {
         let function_bytecode = std::mem::replace(&mut self.chunk, parent);
 
         let fun = ObjFunction::new(
-            InternedString::new(name.item),
+            STRING_INTERNER.lock().unwrap().intern(name.item),
             function_bytecode.bytecode,
             function_bytecode.constants.into(),
             arity,
@@ -394,7 +405,7 @@ impl<'a> Compiler<'a> {
             return Ok((ident_str.item, local_idx, ident_str.span));
         }
 
-        self.compile_ident_constant(ident_str.clone().map_into(|s| s.to_string()))
+        self.compile_ident_constant(ident_str.clone())
             .map(|a| (ident_str.item, a, ident_str.span))
     }
 
@@ -424,7 +435,7 @@ impl<'a> Compiler<'a> {
             if local.depth < self.chunk.scope_depth {
                 break;
             }
-            if local.ident.item == ident.item {
+            if *local.ident.item == ident.item {
                 let kind = CompileErrorKind::ReassignmentOfVariableInLocalScope {
                     ident: ident.item.to_string(),
                 };
@@ -434,7 +445,7 @@ impl<'a> Compiler<'a> {
         }
 
         let local = Local {
-            ident: ident.map_into(|s| s.to_string()),
+            ident: ident.map_into(|s| STRING_INTERNER.lock().unwrap().intern(s)),
             depth: self.chunk.scope_depth,
             init: false,
             is_captured: false,
@@ -444,9 +455,11 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_ident_constant(&mut self, ident: Spanned<String>) -> Result<u8, StaticError<'a>> {
+    fn compile_ident_constant(&mut self, ident: Spanned<&str>) -> Result<u8, StaticError<'a>> {
         let span = ident.span;
-        let ident = Value::new_object(Object::String(InternedString::new(ident.item)));
+        let ident = Value::new_object(Object::String(
+            STRING_INTERNER.lock().unwrap().intern(ident.item),
+        ));
         let idx = self.add_constant(ident);
         let Ok(idx) = u8::try_from(idx) else {
             let kind = CompileErrorKind::Msg("too many constants".into());
@@ -892,7 +905,9 @@ impl<'a> Compiler<'a> {
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
             Token::String { value, .. } => self
                 .compile_constant(
-                    Value::new_object(Object::String(InternedString::new(value.to_string()))),
+                    Value::new_object(Object::String(
+                        STRING_INTERNER.lock().unwrap().intern(value.to_string()),
+                    )),
                     prefix.span,
                 )
                 .map(|_| ()),
@@ -918,7 +933,7 @@ impl<'a> Compiler<'a> {
         let _dot = self.consume(Token::is_dot, || &[TokenKind::Dot])?;
         let name = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let name = name.map(|name| name.clone().try_into_ident().unwrap());
-        let name_const_idx = self.compile_ident_constant(name.map(|name| name.to_string()))?;
+        let name_const_idx = self.compile_ident_constant(name)?;
 
         self.compile_named_variable("this", Span::new(0, 0, 0), false)?;
         self.compile_named_variable("super", Span::new(0, 0, 0), false)?;
@@ -972,8 +987,7 @@ impl<'a> Compiler<'a> {
                     )
                 }
                 None => {
-                    let idx =
-                        self.compile_ident_constant(Spanned::new(ident.to_string(), span.clone()))?;
+                    let idx = self.compile_ident_constant(Spanned::new(ident, span.clone()))?;
                     (
                         Instruction::GetGlobal(idx),
                         Instruction::SetGlobal(idx),
@@ -1057,7 +1071,7 @@ impl<'a> Compiler<'a> {
         span: Span,
     ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
         for (i, local) in unit.locals.iter().enumerate().rev() {
-            if local.ident.item == ident {
+            if *local.ident.item == ident {
                 assert!(i < u8::MAX as usize);
                 if !local.init {
                     let kind = CompileErrorKind::UseOfLocalInItsOwnInitializer;
@@ -1133,7 +1147,7 @@ impl<'a> Compiler<'a> {
     ) -> Result<(), StaticError<'a>> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
-        let name_const_idx = self.compile_ident_constant(ident.map(|ident| ident.to_string()))?;
+        let name_const_idx = self.compile_ident_constant(ident.clone())?;
 
         let maybe_eq = self.lexer.next_if(Token::is_eq)?;
         if can_assign && maybe_eq.is_some() {
@@ -1248,7 +1262,7 @@ impl Precedence {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Local {
-    pub ident: Spanned<String>,
+    pub ident: Spanned<InternedString>,
     pub depth: usize,
     pub init: bool,
     pub is_captured: bool,

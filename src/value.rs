@@ -163,9 +163,9 @@ pub enum Object {
     NativeFn(Rc<NativeFn>),
     Closure(Rc<ObjClosure>),
     WeakClosure(Weak<ObjClosure>),
-    Upvalue(Rc<RefCell<ObjUpvalue>>),
-    Class(Rc<RefCell<ObjClass>>),
-    Instance(Rc<RefCell<ObjInstance>>),
+    Upvalue(Rc<RefCell<ObjUpvalue>>), // RefCell because we need to close it 
+    Class(Rc<RefCell<ObjClass>>), // RefCell because we need to add all the methods after the class has been created
+    Instance(Rc<RefCell<ObjInstance>>), // RefCell because we need to add properties to it
     WeakInstance(Weak<RefCell<ObjInstance>>),
     BoundMethod(Rc<ObjBoundMethod>),
 }

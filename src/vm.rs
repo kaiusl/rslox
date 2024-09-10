@@ -4,6 +4,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, Write};
 use std::rc::Rc;
+use std::sync::{LazyLock, Mutex};
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
@@ -16,6 +17,9 @@ use crate::value::{
 #[cfg(feature = "debug_disassemble")]
 use crate::disassembler::Disassembler;
 
+pub static STRING_INTERNER: LazyLock<Mutex<StringInterner>> =
+    LazyLock::new(|| Mutex::new(StringInterner::new()));
+
 use self::error::{RuntimeError, RuntimeErrorKind};
 
 pub mod error;
@@ -25,7 +29,6 @@ type Stack<T> = Vec<T>;
 #[derive(Debug)]
 pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub stack: Stack<Value>,
-    pub strings: StringInterner,
     pub globals: HashMap<InternedString, Value>,
     pub call_frames: Vec<CallFrame>,
     pub frame: CallFrame,
@@ -55,7 +58,6 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let mut vm = Vm {
             frame: CallFrame::new(),
             stack: Stack::new(),
-            strings: StringInterner::new(),
             globals: HashMap::new(),
             call_frames: Vec::new(),
             open_upvalues: BTreeMap::new(),
@@ -838,7 +840,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn define_native(&mut self, name: impl Into<String> + AsRef<str>, fun: NativeFn) {
-        let name = self.strings.intern(name);
+        let name = STRING_INTERNER.lock().unwrap().intern(name);
         let fun = Object::NativeFn(Rc::new(fun));
         let fun = Value::new_object(fun);
         self.globals.insert(name, fun);
@@ -923,7 +925,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => match (lhs, rhs) {
                 (Object::String(lhs), Object::String(rhs)) => {
                     let new = lhs.to_string() + &rhs;
-                    let new = self.strings.intern(new);
+                    let new = STRING_INTERNER.lock().unwrap().intern(new);
                     self.stack.push(Value::new_object(Object::String(new)));
                 }
                 _ => {
