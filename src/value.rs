@@ -15,7 +15,6 @@ pub enum Value {
     Bool(bool),
     Nil,
     Object(Object),
-    WeakObject(WeakObject),
 }
 
 impl Value {
@@ -72,10 +71,8 @@ impl Value {
     }
 
     pub fn try_to_function(&self) -> Option<Rc<ObjFunction>> {
-        match self {
-            Self::Object(Object::Function(fund)) => return Some(Rc::clone(fund)),
-            Self::WeakObject(WeakObject::Function(fund)) => return Some(fund.upgrade().unwrap()),
-            _ => (),
+        if let Self::Object(Object::Function(fund)) = self {
+            return Some(Rc::clone(fund));
         }
 
         None
@@ -84,9 +81,7 @@ impl Value {
     pub fn try_to_closure(&self) -> Option<Rc<ObjClosure>> {
         match self {
             Self::Object(Object::Closure(closure)) => return Some(Rc::clone(closure)),
-            Self::WeakObject(WeakObject::Closure(closure)) => {
-                return Some(closure.upgrade().unwrap())
-            }
+            Self::Object(Object::WeakClosure(closure)) => return Some(closure.upgrade().unwrap()),
             _ => (),
         }
 
@@ -94,10 +89,8 @@ impl Value {
     }
 
     pub fn try_to_class(&self) -> Option<Rc<RefCell<ObjClass>>> {
-        match self {
-            Self::Object(Object::Class(cls)) => return Some(Rc::clone(cls)),
-            Self::WeakObject(WeakObject::Class(cls)) => return Some(cls.upgrade().unwrap()),
-            _ => (),
+        if let Self::Object(Object::Class(cls)) = self {
+            return Some(Rc::clone(cls));
         }
 
         None
@@ -106,7 +99,7 @@ impl Value {
     pub fn try_to_instance(&self) -> Option<Rc<RefCell<ObjInstance>>> {
         match self {
             Self::Object(Object::Instance(inst)) => return Some(Rc::clone(inst)),
-            Self::WeakObject(WeakObject::Instance(inst)) => return Some(inst.upgrade().unwrap()),
+            Self::Object(Object::WeakInstance(inst)) => return Some(inst.upgrade().unwrap()),
             _ => (),
         }
 
@@ -120,21 +113,19 @@ impl Value {
     pub fn to_weak(&self) -> Self {
         match self {
             Value::Object(o) => match o {
-                Object::Function(fun) => Self::WeakObject(WeakObject::Function(Rc::downgrade(fun))),
+                //Object::Function(fun) => Self::WeakObject(WeakObject::Function(Rc::downgrade(fun))),
                 Object::Closure(closure) => {
-                    Self::WeakObject(WeakObject::Closure(Rc::downgrade(closure)))
+                    Self::Object(Object::WeakClosure(Rc::downgrade(closure)))
                 }
-                Object::Upvalue(upvalue) => {
-                    Self::WeakObject(WeakObject::Upvalue(Rc::downgrade(upvalue)))
-                }
-                Object::Class(cls) => Self::WeakObject(WeakObject::Class(Rc::downgrade(cls))),
-                Object::Instance(inst) => {
-                    Self::WeakObject(WeakObject::Instance(Rc::downgrade(inst)))
-                }
-                Object::BoundMethod(bm) => {
-                    Self::WeakObject(WeakObject::BoundMethod(Rc::downgrade(bm)))
-                }
-                _ => self.clone(),
+                // Object::Upvalue(upvalue) => {
+                //     Self::WeakObject(WeakObject::Upvalue(Rc::downgrade(upvalue)))
+                // }
+                // Object::Class(cls) => Self::WeakObject(WeakObject::Class(Rc::downgrade(cls))),
+                Object::Instance(inst) => Self::Object(Object::WeakInstance(Rc::downgrade(inst))),
+                // Object::BoundMethod(bm) => {
+                //     Self::WeakObject(WeakObject::BoundMethod(Rc::downgrade(bm)))
+                // }
+                _ => panic!("cannot convert {:?} to weak", o),
             },
             _ => self.clone(),
         }
@@ -148,7 +139,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::Object(o) => write!(f, "{}", o),
-            Value::WeakObject(o) => write!(f, "{}", o),
+            //Value::WeakObject(o) => write!(f, "{}", o),
         }
     }
 }
@@ -160,20 +151,22 @@ impl fmt::Debug for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::Object(o) => write!(f, "{:?}", o),
-            Value::WeakObject(o) => write!(f, "{:?}", o),
+            //Value::WeakObject(o) => write!(f, "{:?}", o),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Object {
     String(InternedString),
     Function(Rc<ObjFunction>),
     NativeFn(Rc<NativeFn>),
     Closure(Rc<ObjClosure>),
+    WeakClosure(Weak<ObjClosure>),
     Upvalue(Rc<RefCell<ObjUpvalue>>),
     Class(Rc<RefCell<ObjClass>>),
     Instance(Rc<RefCell<ObjInstance>>),
+    WeakInstance(Weak<RefCell<ObjInstance>>),
     BoundMethod(Rc<ObjBoundMethod>),
 }
 
@@ -184,41 +177,33 @@ impl fmt::Display for Object {
             Object::Function(fun) => write!(f, "{}", fun),
             Object::NativeFn(_) => write!(f, "<native fun>"),
             Object::Closure(closure) => write!(f, "{}", closure),
+            Object::WeakClosure(closure) => write!(f, "{}", closure.upgrade().unwrap()),
             Object::Upvalue(upvalue) => write!(f, "{}", RefCell::borrow(upvalue)),
             Object::Class(cls) => write!(f, "{}", RefCell::borrow(cls)),
             Object::Instance(inst) => write!(f, "{}", RefCell::borrow(inst)),
+            Object::WeakInstance(inst) => {
+                write!(f, "{}", RefCell::borrow(&inst.upgrade().unwrap()))
+            }
             Object::BoundMethod(bm) => write!(f, "{}", bm),
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum WeakObject {
-    Function(Weak<ObjFunction>),
-    Closure(Weak<ObjClosure>),
-    Upvalue(Weak<RefCell<ObjUpvalue>>),
-    Class(Weak<RefCell<ObjClass>>),
-    Instance(Weak<RefCell<ObjInstance>>),
-    BoundMethod(Weak<ObjBoundMethod>),
-}
-
-impl PartialEq for WeakObject {
+impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Function(l0), Self::Function(r0)) => l0.upgrade() == r0.upgrade(),
-            (Self::Closure(l0), Self::Closure(r0)) => l0.upgrade() == r0.upgrade(),
-            (Self::Upvalue(l0), Self::Upvalue(r0)) => l0.upgrade() == r0.upgrade(),
-            (Self::Class(l0), Self::Class(r0)) => l0.upgrade() == r0.upgrade(),
-            (Self::Instance(l0), Self::Instance(r0)) => l0.upgrade() == r0.upgrade(),
-            (Self::BoundMethod(l0), Self::BoundMethod(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::String(l0), Self::String(r0)) => l0 == r0,
+            (Self::Function(l0), Self::Function(r0)) => l0 == r0,
+            (Self::NativeFn(l0), Self::NativeFn(r0)) => l0 == r0,
+            (Self::Closure(l0), Self::Closure(r0)) => l0 == r0,
+            (Self::WeakClosure(l0), Self::WeakClosure(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::Upvalue(l0), Self::Upvalue(r0)) => l0 == r0,
+            (Self::Class(l0), Self::Class(r0)) => l0 == r0,
+            (Self::Instance(l0), Self::Instance(r0)) => l0 == r0,
+            (Self::WeakInstance(l0), Self::WeakInstance(r0)) => l0.upgrade() == r0.upgrade(),
+            (Self::BoundMethod(l0), Self::BoundMethod(r0)) => l0 == r0,
             _ => false,
         }
-    }
-}
-
-impl fmt::Display for WeakObject {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
     }
 }
 
