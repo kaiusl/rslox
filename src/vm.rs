@@ -716,31 +716,51 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         while let Some(last) = self.open_upvalues.last_entry() {
             if *last.key() >= idx {
                 // Make sure not to create a Rc cycle
-                //
-                // One way to create cycle is if upvalue is a class and it's methods hold these upvalues
-                // Since we are closing the upvalue of class, then the class must be leaving the stack.
-                // This means that the closure should become the owner of the class and the class should not have a strong reference to that closure.
-                // Essentially the user program doesn't have a reference to the class anymore, only to the closure.
-                //
-                // Note that we cannot make all closure references from class weak because if the closure calls other closures, the class must still own them,
-                // or they will be removed.
-                //
-                // In summary, we must make all references from the class to the closure weak, where the closure has an upvalue to the class.
-                let value = self.stack[*last.key()].clone();
-                if let Value::Object(Object::Class(cls)) = &value {
-                    let mut class = cls.borrow_mut();
+                let mut value = self.stack[*last.key()].clone();
 
-                    for m in class.methods.values_mut() {
-                        let method = m.try_to_closure().unwrap();
-                        for u in method.upvalues.iter() {
-                            let u = u.borrow();
-                            if let ObjUpvalue::Open(idx_) = &*u {
-                                if *idx_ == idx {
-                                    *m = m.to_weak();
+                match &value {
+                    Value::Object(Object::Class(cls)) => {
+                        // One way to create cycle is if upvalue is a class and it's methods hold these upvalues
+                        // Since we are closing the upvalue of class, then the class must be leaving the stack.
+                        // This means that the closure should become the owner of the class and the class should not have a strong reference to that closure.
+                        // Essentially the user program doesn't have a reference to the class anymore, only to the closure.
+                        //
+                        // Note that we cannot make all closure references from class weak because if the closure calls other closures, the class must still own them,
+                        // or they will be removed.
+                        //
+                        // In summary, we must make all references from the class to the closure weak, where the closure has an upvalue to the class.
+                        let mut class = cls.borrow_mut();
+
+                        for m in class.methods.values_mut() {
+                            let method = m.try_to_closure().unwrap();
+                            for u in method.upvalues.iter() {
+                                let u = u.borrow();
+                                if let ObjUpvalue::Open(idx_) = &*u {
+                                    if *idx_ == idx {
+                                        *m = m.to_weak();
+                                    }
                                 }
                             }
                         }
                     }
+                    Value::Object(Object::Closure(closure)) => {
+                        // A self referential closure will have an upvalue that points to itself, that upvalue needs to be a weak reference
+                        let mut has_self_ref = false;
+                        for u in closure.upvalues.iter() {
+                            let u = u.borrow();
+                            if let ObjUpvalue::Open(idx_) = &*u {
+                                if *idx_ == idx {
+                                    has_self_ref = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if has_self_ref {
+                            value = value.to_weak();
+                        }
+                    }
+                    _ => {}
                 }
 
                 *last.get().borrow_mut() = ObjUpvalue::Closed(value);
