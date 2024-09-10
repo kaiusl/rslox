@@ -38,72 +38,72 @@ impl Value {
         Self::new_object(Object::BoundMethod(Rc::new(bm)))
     }
 
-    pub fn try_into_number(self) -> Result<f64, Self> {
-        if let Self::Number(v) = self {
-            Ok(v)
-        } else {
-            Err(self)
-        }
-    }
-
-    pub fn try_into_bool(self) -> Result<bool, Self> {
-        if let Self::Bool(v) = self {
-            Ok(v)
-        } else {
-            Err(self)
-        }
-    }
-
-    pub fn try_into_string(self) -> Result<InternedString, Self> {
+    pub fn try_as_string(&self) -> Option<&InternedString> {
         if let Self::Object(Object::String(s)) = self {
-            return Ok(s.clone());
+            return Some(s);
         }
 
-        Err(self)
+        None
     }
 
     pub fn try_to_string(&self) -> Option<InternedString> {
-        if let Self::Object(Object::String(s)) = self {
-            return Some(s.clone());
+        self.try_as_string().cloned()
+    }
+
+    pub fn try_as_function(&self) -> Option<&Rc<ObjFunction>> {
+        if let Self::Object(Object::Function(fund)) = self {
+            return Some(fund);
         }
 
         None
     }
 
     pub fn try_to_function(&self) -> Option<Rc<ObjFunction>> {
-        if let Self::Object(Object::Function(fund)) = self {
-            return Some(Rc::clone(fund));
+        self.try_as_function().cloned()
+    }
+
+    pub fn try_as_closure(&self) -> Option<RcOrWeakRef<'_, ObjClosure>> {
+        match self {
+            Self::Object(Object::Closure(closure)) => return Some(RcOrWeakRef::Rc(closure)),
+            Self::Object(Object::WeakClosure(closure)) => return Some(RcOrWeakRef::Weak(closure)),
+            _ => (),
         }
 
         None
     }
 
     pub fn try_to_closure(&self) -> Option<Rc<ObjClosure>> {
-        match self {
-            Self::Object(Object::Closure(closure)) => return Some(Rc::clone(closure)),
-            Self::Object(Object::WeakClosure(closure)) => return Some(closure.upgrade().unwrap()),
-            _ => (),
+        self.try_as_closure()
+            .as_ref()
+            .and_then(RcOrWeakRef::upgrade)
+    }
+
+    pub fn try_as_class(&self) -> Option<&Rc<RefCell<ObjClass>>> {
+        if let Self::Object(Object::Class(cls)) = self {
+            return Some(cls);
         }
 
         None
     }
 
     pub fn try_to_class(&self) -> Option<Rc<RefCell<ObjClass>>> {
-        if let Self::Object(Object::Class(cls)) = self {
-            return Some(Rc::clone(cls));
+        self.try_as_class().cloned()
+    }
+
+    pub fn try_as_instance(&self) -> Option<RcOrWeakRef<'_, RefCell<ObjInstance>>> {
+        match self {
+            Self::Object(Object::Instance(inst)) => return Some(RcOrWeakRef::Rc(inst)),
+            Self::Object(Object::WeakInstance(inst)) => return Some(RcOrWeakRef::Weak(inst)),
+            _ => (),
         }
 
         None
     }
 
     pub fn try_to_instance(&self) -> Option<Rc<RefCell<ObjInstance>>> {
-        match self {
-            Self::Object(Object::Instance(inst)) => return Some(Rc::clone(inst)),
-            Self::Object(Object::WeakInstance(inst)) => return Some(inst.upgrade().unwrap()),
-            _ => (),
-        }
-
-        None
+        self.try_as_instance()
+            .as_ref()
+            .and_then(RcOrWeakRef::upgrade)
     }
 
     pub fn is_falsey(&self) -> bool {
@@ -156,6 +156,20 @@ impl fmt::Debug for Value {
     }
 }
 
+pub enum RcOrWeakRef<'a, T> {
+    Rc(&'a Rc<T>),
+    Weak(&'a Weak<T>),
+}
+
+impl<'a, T> RcOrWeakRef<'a, T> {
+    pub fn upgrade(&self) -> Option<Rc<T>> {
+        match self {
+            RcOrWeakRef::Rc(rc) => Some(Rc::clone(rc)),
+            RcOrWeakRef::Weak(weak) => weak.upgrade(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Object {
     String(InternedString),
@@ -163,7 +177,7 @@ pub enum Object {
     NativeFn(Rc<NativeFn>),
     Closure(Rc<ObjClosure>),
     WeakClosure(Weak<ObjClosure>),
-    Upvalue(Rc<RefCell<ObjUpvalue>>), // RefCell because we need to close it 
+    Upvalue(Rc<RefCell<ObjUpvalue>>), // RefCell because we need to close it
     Class(Rc<RefCell<ObjClass>>), // RefCell because we need to add all the methods after the class has been created
     Instance(Rc<RefCell<ObjInstance>>), // RefCell because we need to add properties to it
     WeakInstance(Weak<RefCell<ObjInstance>>),

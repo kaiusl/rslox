@@ -116,7 +116,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         for<'b> &'b mut OUTERR: io::Write,
     {
         if let Err(err) = self.run_core() {
-            let report = miette::Report::new(err.to_owned()).with_source_code(input.to_string());
+            let report = miette::Report::new(err).with_source_code(input.to_string());
             match writeln!(&mut self.outerr, "{report:?}") {
                 Ok(_) => (),
                 Err(_) => {
@@ -227,13 +227,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to define global with non string identifier");
         let value = self
             .stack
             .last()
             .expect("tried to define global with no value on stack");
-        self.globals.insert(name, value.clone());
+        self.globals.insert(name.clone(), value.clone());
         self.stack.pop();
     }
 
@@ -241,13 +241,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to get global with non string identifier");
 
-        if let Some(value) = self.globals.get(&name) {
+        if let Some(value) = self.globals.get(name) {
             self.stack.push(value.clone());
         } else {
-            let kind = RuntimeErrorKind::UndefinedVariable { name };
+            let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
             return Err(self.runtime_error(kind, 2));
         }
 
@@ -346,16 +346,17 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let prop_name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to get property name from non string");
-        let prop_value = instance.properties.get(&prop_name);
+        let prop_value = instance.properties.get(prop_name);
         match prop_value {
             Some(value) => {
                 self.stack.pop(); // instance
                 self.stack.push(value.clone());
             }
             None => {
-                self.bind_method(&instance.class.borrow(), prop_name)?;
+                let prop_name = prop_name.clone();
+                self.bind_method(&instance.class.borrow(), &prop_name)?;
             }
         }
 
@@ -597,38 +598,49 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_invoke(&mut self) -> Result<(), RuntimeError> {
+        let idx = self
+            .frame
+            .instructions
+            .try_u8()
+            .expect("tried to read constant with no more instructions");
+
         let name = self
             .frame
-            .expect_constant()
-            .try_to_string()
+            .constants
+            .get(idx as usize)
+            .expect("tried to get constant at invalid index")
+            .try_as_string()
             .expect("tried to get method name from non string");
         let arg_count = self
             .frame
             .instructions
             .try_u8()
             .expect("expected a second u8 operand for op invoke");
-        self.invoke(name, arg_count)?;
+
+        // TODO: remove this technically unnecessary clone, but borrow checker complains atm, because we are borrowing from self
+        let name = name.clone();
+        self.invoke(&name, arg_count)?;
         Ok(())
     }
 
     fn run_op_inherit(&mut self) -> Result<(), RuntimeError> {
         // Stack: bottom, .., superclass, subclass
 
+        let class = self
+            .stack
+            .pop()
+            .expect("expected value on stack for op inherit");
+        let class = class.try_as_class().expect("expected subclass on stack");
         let Some(super_class) = self
             .stack
-            .get(self.stack.len() - 2)
+            .last()
             .expect("expected superclass on stack")
-            .try_to_class()
+            .try_as_class()
         else {
             let kind = RuntimeErrorKind::Msg("superclass must be a class".into());
             return Err(self.runtime_error(kind, 1));
         };
-        let class = self
-            .stack
-            .pop()
-            .expect("expected value on stack for op inherit")
-            .try_to_class()
-            .expect("expected subclass on stack");
+
         class.borrow_mut().methods.extend(
             super_class
                 .borrow()
@@ -646,20 +658,20 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let method_name = self
             .frame
             .expect_constant()
-            .try_to_string()
-            .expect("tried to get method name from non string");
-        let superclass = self
+            .try_as_string()
+            .expect("tried to get method name from non string")
+            .clone();
+        let class = self
             .stack
             .pop()
-            .expect("expected value on stack for op get super")
-            .try_to_class()
-            .expect("expected superclass on stack");
+            .expect("expected value on stack for op get super");
+        let superclass = class.try_as_class().expect("expected superclass on stack");
         let superclass = superclass.borrow();
-        self.bind_method(&superclass, method_name)?;
+        self.bind_method(&superclass, &method_name)?;
         Ok(())
     }
 
-    fn invoke(&mut self, name: InternedString, arg_count: u8) -> Result<(), RuntimeError> {
+    fn invoke(&mut self, name: &InternedString, arg_count: u8) -> Result<(), RuntimeError> {
         let Some(instance) =
             self.stack[self.stack.len() - arg_count as usize - 1].try_to_instance()
         else {
@@ -669,7 +681,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         let instance = instance.borrow();
 
-        if let Some(field) = instance.properties.get(&name) {
+        if let Some(field) = instance.properties.get(name) {
             let idx = self.stack.len() - arg_count as usize - 1;
             self.stack[idx] = field.clone();
             return self.call_value(field.clone(), arg_count);
@@ -682,31 +694,27 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn invoke_from_class(
         &mut self,
         class: &ObjClass,
-        name: InternedString,
+        name: &InternedString,
         arg_count: u8,
     ) -> Result<(), RuntimeError> {
-        let Some(method) = class.methods.get(&name) else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name };
+        let Some(method) = class.methods.get(name) else {
+            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
             return Err(self.runtime_error(kind, 1));
         };
 
         let method = method.try_to_closure().unwrap();
 
-        self.call_closure(&method, arg_count)
+        self.call_closure(method, arg_count)
     }
 
-    fn bind_method(&mut self, class: &ObjClass, name: InternedString) -> Result<(), RuntimeError> {
-        let Some(method) = class.methods.get(&name) else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name };
+    fn bind_method(&mut self, class: &ObjClass, name: &InternedString) -> Result<(), RuntimeError> {
+        let Some(method) = class.methods.get(name) else {
+            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
             return Err(self.runtime_error(kind, 1));
         };
         let method = method.try_to_closure().unwrap();
 
-        let receiver = self
-            .stack
-            .pop()
-            .expect("expected receiver on stack")
-            .clone();
+        let receiver = self.stack.pop().expect("expected receiver on stack");
         let method = ObjBoundMethod::new(receiver, method);
         let method = Value::new_bound_method(method);
 
@@ -791,7 +799,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
         match callee {
-            Value::Object(Object::Closure(fun)) => self.call_closure(&fun, arg_count),
+            Value::Object(Object::Closure(fun)) => self.call_closure(fun, arg_count),
             //Value::Object(Object::Function(fun)) => self.call_function(&fun, arg_count),
             Value::Object(Object::NativeFn(fun)) => {
                 let result = fun(
@@ -813,7 +821,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 let borrow = cls.borrow();
                 if let Some(initializer) = borrow.methods.get(Compiler::INIT_METHOD_NAME) {
                     let initializer = initializer.try_to_closure().unwrap();
-                    self.call_closure(&initializer, arg_count)?;
+                    self.call_closure(initializer, arg_count)?;
                 } else if arg_count != 0 {
                     let kind = RuntimeErrorKind::Msg(
                         format!("expected 0 arguments but got {}", arg_count).into(),
@@ -829,7 +837,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             Value::Object(Object::BoundMethod(method)) => {
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = method.receiver.clone();
-                self.call_closure(&method.method, arg_count)
+                self.call_closure(Rc::clone(&method.method), arg_count)
             }
 
             _ => {
@@ -855,11 +863,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Value::Number(time)
     }
 
-    fn call_closure(
-        &mut self,
-        closure: &Rc<ObjClosure>,
-        arg_count: u8,
-    ) -> Result<(), RuntimeError> {
+    fn call_closure(&mut self, closure: Rc<ObjClosure>, arg_count: u8) -> Result<(), RuntimeError> {
         let fun = &*closure.fun;
 
         if arg_count as usize != fun.arity {
@@ -880,7 +884,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             slots: self.stack.len() - arg_count as usize - 1,
             spans: Rc::clone(&fun.spans),
             constants: Rc::clone(&fun.constants),
-            closure: Some(Rc::clone(closure)),
+            closure: Some(closure),
         };
         let prev_frame = std::mem::replace(&mut self.frame, frame);
         self.call_frames.push(prev_frame);

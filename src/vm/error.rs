@@ -35,15 +35,6 @@ pub struct RuntimeError {
     pub kind: RuntimeErrorKind,
 }
 
-impl RuntimeError {
-    pub fn to_owned(self) -> RuntimeError {
-        RuntimeError {
-            span: self.span,
-            kind: self.kind,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum RuntimeErrorKind {
     InvalidOperand { expected: &'static str },
