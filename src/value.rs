@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use crate::bytecode::ByteCode;
@@ -15,6 +15,7 @@ pub enum Value {
     Bool(bool),
     Nil,
     Object(Object),
+    WeakObject(WeakObject),
 }
 
 impl Value {
@@ -71,32 +72,42 @@ impl Value {
     }
 
     pub fn try_to_function(&self) -> Option<Rc<ObjFunction>> {
-        if let Self::Object(Object::Function(fund)) = self {
-            return Some(Rc::clone(fund));
+        match self {
+            Self::Object(Object::Function(fund)) => return Some(Rc::clone(fund)),
+            Self::WeakObject(WeakObject::Function(fund)) => return Some(fund.upgrade().unwrap()),
+            _ => (),
         }
 
         None
     }
 
     pub fn try_to_closure(&self) -> Option<Rc<ObjClosure>> {
-        if let Self::Object(Object::Closure(closure)) = self {
-            return Some(Rc::clone(closure));
+        match self {
+            Self::Object(Object::Closure(closure)) => return Some(Rc::clone(closure)),
+            Self::WeakObject(WeakObject::Closure(closure)) => {
+                return Some(closure.upgrade().unwrap())
+            }
+            _ => (),
         }
 
         None
     }
 
     pub fn try_to_class(&self) -> Option<Rc<RefCell<ObjClass>>> {
-        if let Self::Object(Object::Class(cls)) = self {
-            return Some(Rc::clone(cls));
+        match self {
+            Self::Object(Object::Class(cls)) => return Some(Rc::clone(cls)),
+            Self::WeakObject(WeakObject::Class(cls)) => return Some(cls.upgrade().unwrap()),
+            _ => (),
         }
 
         None
     }
 
     pub fn try_to_instance(&self) -> Option<Rc<RefCell<ObjInstance>>> {
-        if let Self::Object(Object::Instance(inst)) = self {
-            return Some(Rc::clone(inst));
+        match self {
+            Self::Object(Object::Instance(inst)) => return Some(Rc::clone(inst)),
+            Self::WeakObject(WeakObject::Instance(inst)) => return Some(inst.upgrade().unwrap()),
+            _ => (),
         }
 
         None
@@ -104,6 +115,29 @@ impl Value {
 
     pub fn is_falsey(&self) -> bool {
         matches!(self, Value::Nil | Value::Bool(false))
+    }
+
+    pub fn to_weak(&self) -> Self {
+        match self {
+            Value::Object(o) => match o {
+                Object::Function(fun) => Self::WeakObject(WeakObject::Function(Rc::downgrade(fun))),
+                Object::Closure(closure) => {
+                    Self::WeakObject(WeakObject::Closure(Rc::downgrade(closure)))
+                }
+                Object::Upvalue(upvalue) => {
+                    Self::WeakObject(WeakObject::Upvalue(Rc::downgrade(upvalue)))
+                }
+                Object::Class(cls) => Self::WeakObject(WeakObject::Class(Rc::downgrade(cls))),
+                Object::Instance(inst) => {
+                    Self::WeakObject(WeakObject::Instance(Rc::downgrade(inst)))
+                }
+                Object::BoundMethod(bm) => {
+                    Self::WeakObject(WeakObject::BoundMethod(Rc::downgrade(bm)))
+                }
+                _ => self.clone(),
+            },
+            _ => self.clone(),
+        }
     }
 }
 
@@ -114,6 +148,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::Object(o) => write!(f, "{}", o),
+            Value::WeakObject(o) => write!(f, "{}", o),
         }
     }
 }
@@ -125,6 +160,7 @@ impl fmt::Debug for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::Object(o) => write!(f, "{:?}", o),
+            Value::WeakObject(o) => write!(f, "{:?}", o),
         }
     }
 }
@@ -153,6 +189,28 @@ impl fmt::Display for Object {
             Object::Instance(inst) => write!(f, "{}", RefCell::borrow(inst)),
             Object::BoundMethod(bm) => write!(f, "{}", bm),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum WeakObject {
+    Function(Weak<ObjFunction>),
+    Closure(Weak<ObjClosure>),
+    Upvalue(Weak<RefCell<ObjUpvalue>>),
+    Class(Weak<RefCell<ObjClass>>),
+    Instance(Weak<RefCell<ObjInstance>>),
+    BoundMethod(Weak<ObjBoundMethod>),
+}
+
+impl PartialEq for WeakObject {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
+}
+
+impl fmt::Display for WeakObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
     }
 }
 
@@ -287,7 +345,7 @@ impl fmt::Display for ObjUpvalue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjClass {
     pub name: InternedString,
-    pub methods: HashMap<InternedString, Rc<ObjClosure>>,
+    pub methods: HashMap<InternedString, Value>,
 }
 
 impl fmt::Display for ObjClass {

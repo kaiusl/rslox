@@ -13,6 +13,9 @@ use crate::value::{
     Object, Value,
 };
 
+#[cfg(feature = "debug_disassemble")]
+use crate::disassembler::Disassembler;
+
 use self::error::{RuntimeError, RuntimeErrorKind};
 
 pub mod error;
@@ -583,7 +586,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let method = self
             .stack
             .pop()
-            .expect("expected value to be on stack to be defined as class method")
+            .expect("expected value to be on stack to be defined as class method");
+
+        method
             .try_to_closure()
             .expect("expected a closure on stack to be defined as class method");
         class.borrow_mut().methods.insert(name, method);
@@ -683,7 +688,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             return Err(self.runtime_error(kind, 1));
         };
 
-        self.call_closure(method, arg_count)
+        let method = method.try_to_closure().unwrap();
+
+        self.call_closure(&method, arg_count)
     }
 
     fn bind_method(&mut self, class: &ObjClass, name: InternedString) -> Result<(), RuntimeError> {
@@ -691,13 +698,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             let kind = RuntimeErrorKind::UndefinedProperty { name };
             return Err(self.runtime_error(kind, 1));
         };
+        let method = method.try_to_closure().unwrap();
 
         let receiver = self
             .stack
             .pop()
             .expect("expected receiver on stack")
             .clone();
-        let method = ObjBoundMethod::new(receiver, Rc::clone(method));
+        let method = ObjBoundMethod::new(receiver, method);
         let method = Value::new_bound_method(method);
 
         self.stack.push(method);
@@ -707,7 +715,35 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn close_upvalues(&mut self, idx: usize) {
         while let Some(last) = self.open_upvalues.last_entry() {
             if *last.key() >= idx {
-                *last.get().borrow_mut() = ObjUpvalue::Closed(self.stack[*last.key()].clone());
+                // Make sure not to create a Rc cycle
+                //
+                // One way to create cycle is if upvalue is a class and it's methods hold these upvalues
+                // Since we are closing the upvalue of class, then the class must be leaving the stack.
+                // This means that the closure should become the owner of the class and the class should not have a strong reference to that closure.
+                // Essentially the user program doesn't have a reference to the class anymore, only to the closure.
+                //
+                // Note that we cannot make all closure references from class weak because if the closure calls other closures, the class must still own them,
+                // or they will be removed.
+                //
+                // In summary, we must make all references from the class to the closure weak, where the closure has an upvalue to the class.
+                let value = self.stack[*last.key()].clone();
+                if let Value::Object(Object::Class(cls)) = &value {
+                    let mut class = cls.borrow_mut();
+
+                    for m in class.methods.values_mut() {
+                        let method = m.try_to_closure().unwrap();
+                        for u in method.upvalues.iter() {
+                            let u = u.borrow();
+                            if let ObjUpvalue::Open(idx_) = &*u {
+                                if *idx_ == idx {
+                                    *m = m.to_weak();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                *last.get().borrow_mut() = ObjUpvalue::Closed(value);
                 last.remove();
             } else {
                 break;
@@ -754,7 +790,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 self.stack[receiver_slot] = instance.clone();
                 let borrow = cls.borrow();
                 if let Some(initializer) = borrow.methods.get(Compiler::INIT_METHOD_NAME) {
-                    self.call_closure(initializer, arg_count)?;
+                    let initializer = initializer.try_to_closure().unwrap();
+                    self.call_closure(&initializer, arg_count)?;
                 } else if arg_count != 0 {
                     let kind = RuntimeErrorKind::Msg(
                         format!("expected 0 arguments but got {}", arg_count).into(),
