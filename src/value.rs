@@ -6,6 +6,8 @@ use std::ops;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
+use fnv::FnvHashMap;
+
 use crate::bytecode::ByteCode;
 use crate::common::Span;
 
@@ -320,7 +322,7 @@ pub struct ObjFunction {
     pub arity: usize,
     pub name: InternedString,
     pub bytecode: Rc<[u8]>,
-    pub spans: Rc<HashMap<usize, Span>>,
+    pub spans: Rc<FnvHashMap<usize, Span>>,
     pub constants: Rc<[Value]>,
     pub upvalues_count: usize,
 }

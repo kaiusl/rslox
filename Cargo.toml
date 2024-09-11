@@ -10,6 +10,7 @@ num-derive = "0.4.2"
 thiserror = "1.0.63"
 clap = { version = "4.5.17", features = ["derive"] }
 arrayvec = "0.7.6"
+fnv = "1.0.7"
 
 [dev-dependencies]
 insta = "1.40.0"
