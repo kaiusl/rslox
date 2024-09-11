@@ -337,7 +337,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .stack
             .last()
             .expect("expected instance on stack to get property")
-            .try_to_instance()
+            .try_as_instance()
         else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
@@ -351,12 +351,29 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let prop_value = instance.properties.get(prop_name);
         match prop_value {
             Some(value) => {
+                let value = value.clone();
+                drop(instance);
                 self.stack.pop(); // instance
-                self.stack.push(value.clone());
+                self.stack.push(value);
             }
             None => {
                 let prop_name = prop_name.clone();
-                self.bind_method(&instance.class.borrow(), &prop_name)?;
+
+                let class = instance.class.borrow();
+                let name: &InternedString = &prop_name;
+                let Some(method) = class.methods.get(name) else {
+                    let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+                    return Err(self.runtime_error(kind, 1));
+                };
+                let method = method.try_to_closure().unwrap();
+                drop(class);
+                drop(instance);
+
+                let receiver = self.stack.pop().expect("expected receiver on stack");
+                let method = ObjBoundMethod::new(receiver, method);
+                let method = Value::new_bound_method(method);
+
+                self.stack.push(method);
             }
         }
 
@@ -366,12 +383,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn run_op_set_property(&mut self) -> Result<(), RuntimeError> {
         // Stack: bottom, .., instance, value_to_set
 
-        let Some(instance) = self
-            .stack
-            .get(self.stack.len() - 2)
-            .expect("expected instance on stack to set property")
-            .try_to_instance()
-        else {
+        let instance = self.stack.swap_remove(self.stack.len() - 2);
+        let Some(instance) = instance.try_as_instance() else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
@@ -382,13 +395,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("tried to set property name from non string");
         let value = self
             .stack
-            .pop()
+            .last()
             .expect("expected value on the stack to set property")
             .clone();
 
-        instance.borrow_mut().properties.insert(name, value.clone());
-        self.stack.pop(); // instance
-        self.stack.push(value);
+        instance.borrow_mut().properties.insert(name, value);
 
         Ok(())
     }
@@ -579,21 +590,21 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect_constant()
             .try_to_string()
             .expect("tried to get method name from non string");
-        let class = self
-            .stack
-            .get(self.stack.len() - 2)
-            .expect("expected class to be on stack to define method on")
-            .try_to_class()
-            .expect("tried to define a method on non class");
-
         let method = self
             .stack
             .pop()
             .expect("expected value to be on stack to be defined as class method");
+        let class = self
+            .stack
+            .last()
+            .expect("expected class to be on stack to define method on")
+            .try_as_class()
+            .expect("tried to define a method on non class");
 
-        method
-            .try_to_closure()
-            .expect("expected a closure on stack to be defined as class method");
+        if !method.is_closure() {
+            panic!("expected a closure on stack to be defined as class method");
+        }
+
         class.borrow_mut().methods.insert(name, method);
     }
 
@@ -673,7 +684,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn invoke(&mut self, name: &InternedString, arg_count: u8) -> Result<(), RuntimeError> {
         let Some(instance) =
-            self.stack[self.stack.len() - arg_count as usize - 1].try_to_instance()
+            self.stack[self.stack.len() - arg_count as usize - 1].try_as_instance()
         else {
             let kind = RuntimeErrorKind::Msg("only instances have methods".into());
             return Err(self.runtime_error(kind, 1));
@@ -683,12 +694,23 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         if let Some(field) = instance.properties.get(name) {
             let idx = self.stack.len() - arg_count as usize - 1;
+            let field = field.clone();
+            drop(instance);
             self.stack[idx] = field.clone();
-            return self.call_value(field.clone(), arg_count);
+            return self.call_value(field, arg_count);
         }
 
         let class = instance.class.borrow();
-        self.invoke_from_class(&class, name, arg_count)
+
+        let Some(method) = class.methods.get(name) else {
+            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+            return Err(self.runtime_error(kind, 1));
+        };
+
+        let method = method.try_to_closure().unwrap();
+        drop(class);
+        drop(instance);
+        self.call_closure(method, arg_count)
     }
 
     fn invoke_from_class(
@@ -742,14 +764,20 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         let mut class = cls.borrow_mut();
 
                         for m in class.methods.values_mut() {
-                            let method = m.try_to_closure().unwrap();
+                            let method = m.try_as_closure().unwrap();
+                            let mut has_self_ref = false;
                             for u in method.upvalues.iter() {
                                 let u = u.borrow();
                                 if let ObjUpvalue::Open(idx_) = &*u {
                                     if *idx_ == idx {
-                                        *m = m.to_weak();
+                                        has_self_ref = true;
+                                        break;
                                     }
                                 }
+                            }
+
+                            if has_self_ref {
+                                *m = m.to_weak();
                             }
                         }
                     }

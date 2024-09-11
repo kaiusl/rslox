@@ -1,5 +1,5 @@
 use core::fmt;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops;
@@ -50,6 +50,14 @@ impl Value {
         self.try_as_string().cloned()
     }
 
+    pub fn try_into_string(self) -> Option<InternedString> {
+        if let Self::Object(Object::String(s)) = self {
+            return Some(s);
+        }
+
+        None
+    }
+
     pub fn try_as_function(&self) -> Option<&Rc<ObjFunction>> {
         if let Self::Object(Object::Function(fund)) = self {
             return Some(fund);
@@ -62,10 +70,24 @@ impl Value {
         self.try_as_function().cloned()
     }
 
-    pub fn try_as_closure(&self) -> Option<RcOrWeakRef<'_, ObjClosure>> {
+    pub fn try_into_function(self) -> Option<Rc<ObjFunction>> {
+        if let Self::Object(Object::Function(fund)) = self {
+            return Some(fund);
+        }
+
+        None
+    }
+
+    pub fn is_closure(&self) -> bool {
+        matches!(self, Self::Object(Object::Closure(_)))
+    }
+
+    pub fn try_as_closure(&self) -> Option<Cow<'_, Rc<ObjClosure>>> {
         match self {
-            Self::Object(Object::Closure(closure)) => return Some(RcOrWeakRef::Rc(closure)),
-            Self::Object(Object::WeakClosure(closure)) => return Some(RcOrWeakRef::Weak(closure)),
+            Self::Object(Object::Closure(closure)) => return Some(Cow::Borrowed(closure)),
+            Self::Object(Object::WeakClosure(closure)) => {
+                return Some(Cow::Owned(closure.upgrade().unwrap()))
+            }
             _ => (),
         }
 
@@ -73,9 +95,18 @@ impl Value {
     }
 
     pub fn try_to_closure(&self) -> Option<Rc<ObjClosure>> {
-        self.try_as_closure()
-            .as_ref()
-            .and_then(RcOrWeakRef::upgrade)
+        self.try_as_closure().map(|a| match a {
+            Cow::Borrowed(a) => a.clone(),
+            Cow::Owned(a) => a,
+        })
+    }
+
+    pub fn try_into_closure(self) -> Option<Rc<ObjClosure>> {
+        match self {
+            Self::Object(Object::Closure(closure)) => Some(closure),
+            Self::Object(Object::WeakClosure(closure)) => Some(closure.upgrade().unwrap()),
+            _ => None,
+        }
     }
 
     pub fn try_as_class(&self) -> Option<&Rc<RefCell<ObjClass>>> {
@@ -90,10 +121,20 @@ impl Value {
         self.try_as_class().cloned()
     }
 
-    pub fn try_as_instance(&self) -> Option<RcOrWeakRef<'_, RefCell<ObjInstance>>> {
+    pub fn try_into_class(self) -> Option<Rc<RefCell<ObjClass>>> {
+        if let Self::Object(Object::Class(cls)) = self {
+            return Some(cls);
+        }
+
+        None
+    }
+
+    pub fn try_as_instance(&self) -> Option<Cow<'_, Rc<RefCell<ObjInstance>>>> {
         match self {
-            Self::Object(Object::Instance(inst)) => return Some(RcOrWeakRef::Rc(inst)),
-            Self::Object(Object::WeakInstance(inst)) => return Some(RcOrWeakRef::Weak(inst)),
+            Self::Object(Object::Instance(inst)) => return Some(Cow::Borrowed(inst)),
+            Self::Object(Object::WeakInstance(inst)) => {
+                return Some(Cow::Owned(inst.upgrade().unwrap()))
+            }
             _ => (),
         }
 
@@ -101,9 +142,18 @@ impl Value {
     }
 
     pub fn try_to_instance(&self) -> Option<Rc<RefCell<ObjInstance>>> {
-        self.try_as_instance()
-            .as_ref()
-            .and_then(RcOrWeakRef::upgrade)
+        self.try_as_instance().map(|a| match a {
+            Cow::Borrowed(a) => a.clone(),
+            Cow::Owned(a) => a,
+        })
+    }
+
+    pub fn try_into_instance(self) -> Option<Rc<RefCell<ObjInstance>>> {
+        match self {
+            Self::Object(Object::Instance(inst)) => Some(inst),
+            Self::Object(Object::WeakInstance(inst)) => Some(inst.upgrade().unwrap()),
+            _ => None,
+        }
     }
 
     pub fn is_falsey(&self) -> bool {
@@ -152,20 +202,6 @@ impl fmt::Debug for Value {
             Value::Nil => write!(f, "nil"),
             Value::Object(o) => write!(f, "{:?}", o),
             //Value::WeakObject(o) => write!(f, "{:?}", o),
-        }
-    }
-}
-
-pub enum RcOrWeakRef<'a, T> {
-    Rc(&'a Rc<T>),
-    Weak(&'a Weak<T>),
-}
-
-impl<'a, T> RcOrWeakRef<'a, T> {
-    pub fn upgrade(&self) -> Option<Rc<T>> {
-        match self {
-            RcOrWeakRef::Rc(rc) => Some(Rc::clone(rc)),
-            RcOrWeakRef::Weak(weak) => weak.upgrade(),
         }
     }
 }
