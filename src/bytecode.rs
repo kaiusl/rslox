@@ -1,23 +1,23 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::{fmt, mem};
 
-use fnv::FnvHashMap;
-
 use crate::common::Span;
 use crate::disassembler::DisassemblerError;
+use crate::vm::BuildHasher;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteCode {
     pub code: Vec<u8>,
-    pub spans: FnvHashMap<usize, Span>,
+    pub spans: HashMap<usize, Span, BuildHasher>,
 }
 
 impl ByteCode {
     pub fn new() -> Self {
         Self {
             code: Vec::new(),
-            spans: FnvHashMap::default(),
+            spans: HashMap::default(),
         }
     }
 

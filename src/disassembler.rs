@@ -5,11 +5,12 @@ use std::rc::Rc;
 use crate::bytecode::{BytesCursor, Instruction};
 use crate::common::Span;
 use crate::value::Value;
+use crate::vm::BuildHasher;
 
 #[derive(Debug, Clone)]
 pub struct Disassembler {
     pub constants: Rc<[Value]>,
-    pub spans: Rc<HashMap<usize, Span>>,
+    pub spans: Rc<HashMap<usize, Span, BuildHasher>>,
     pub cursor: BytesCursor,
     pub prev_line: Option<usize>,
 }
@@ -17,7 +18,7 @@ pub struct Disassembler {
 impl Disassembler {
     pub fn new(
         code: Rc<[u8]>,
-        spans: Rc<HashMap<usize, Span>>,
+        spans: Rc<HashMap<usize, Span, BuildHasher>>,
         constants: Rc<[Value]>,
     ) -> Disassembler {
         Disassembler {

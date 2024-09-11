@@ -6,10 +6,9 @@ use std::ops;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
-use fnv::FnvHashMap;
-
 use crate::bytecode::ByteCode;
 use crate::common::Span;
+use crate::vm::{self, BuildHasher};
 
 #[derive(Clone, PartialEq)]
 pub enum Value {
@@ -322,7 +321,7 @@ pub struct ObjFunction {
     pub arity: usize,
     pub name: InternedString,
     pub bytecode: Rc<[u8]>,
-    pub spans: Rc<FnvHashMap<usize, Span>>,
+    pub spans: Rc<HashMap<usize, Span, BuildHasher>>,
     pub constants: Rc<[Value]>,
     pub upvalues_count: usize,
 }
@@ -390,7 +389,7 @@ impl fmt::Display for ObjUpvalue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjClass {
     pub name: InternedString,
-    pub methods: HashMap<InternedString, Value>,
+    pub methods: HashMap<InternedString, Value, BuildHasher>,
 }
 
 impl fmt::Display for ObjClass {
@@ -403,7 +402,7 @@ impl ObjClass {
     pub fn new(name: InternedString) -> Self {
         Self {
             name,
-            methods: HashMap::new(),
+            methods: HashMap::default(),
         }
     }
 }
@@ -411,14 +410,14 @@ impl ObjClass {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjInstance {
     pub class: Rc<RefCell<ObjClass>>,
-    pub properties: HashMap<InternedString, Value>,
+    pub properties: HashMap<InternedString, Value, BuildHasher>,
 }
 
 impl ObjInstance {
     pub fn new(class: Rc<RefCell<ObjClass>>) -> Self {
         Self {
             class,
-            properties: HashMap::new(),
+            properties: HashMap::default(),
         }
     }
 }

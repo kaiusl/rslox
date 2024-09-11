@@ -1,12 +1,12 @@
 use core::panic;
 use std::cell::{RefCell, RefMut};
 use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, Write};
 use std::rc::Rc;
 use std::sync::{LazyLock, Mutex};
 
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvBuildHasher;
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
@@ -15,6 +15,8 @@ use crate::value::{
     InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjInstance, ObjUpvalue,
     Object, Value,
 };
+
+pub(crate) type BuildHasher = FnvBuildHasher;
 
 #[cfg(feature = "debug_disassemble")]
 use crate::disassembler::Disassembler;
@@ -33,7 +35,7 @@ type Stack<T> = arrayvec::ArrayVec<T, STACK_MAX>;
 #[derive(Debug)]
 pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub stack: Stack<Value>,
-    pub globals: FnvHashMap<InternedString, Value>,
+    pub globals: HashMap<InternedString, Value, BuildHasher>,
     pub call_frames: arrayvec::ArrayVec<CallFrame, MAX_FRAMES>,
     pub frame: CallFrame,
     pub open_upvalues: BTreeMap<usize, Rc<RefCell<ObjUpvalue>>>,
@@ -59,7 +61,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let mut vm = Vm {
             frame: CallFrame::new(),
             stack: Stack::new(),
-            globals: FnvHashMap::default(),
+            globals: HashMap::default(),
             call_frames: arrayvec::ArrayVec::new(),
             open_upvalues: BTreeMap::new(),
             output,
@@ -1069,7 +1071,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 pub struct CallFrame {
     pub instructions: BytesCursor,
     pub slots: usize,
-    pub spans: Rc<FnvHashMap<usize, Span>>,
+    pub spans: Rc<HashMap<usize, Span, BuildHasher>>,
     pub constants: Rc<[Value]>,
     pub closure: Option<Rc<ObjClosure>>,
 }
@@ -1079,7 +1081,7 @@ impl CallFrame {
         Self {
             instructions: BytesCursor::new(Vec::new().into()),
             slots: 0,
-            spans: Rc::new(FnvHashMap::default()),
+            spans: Rc::new(HashMap::default()),
             constants: Rc::new([]),
             closure: None,
         }
@@ -1117,13 +1119,13 @@ impl CallFrame {
 
 #[derive(Debug)]
 pub struct StringInterner {
-    strings: FnvHashSet<InternedString>,
+    strings: HashSet<InternedString, BuildHasher>,
 }
 
 impl StringInterner {
     pub fn new() -> Self {
         Self {
-            strings: FnvHashSet::default(),
+            strings: HashSet::default(),
         }
     }
 
