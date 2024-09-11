@@ -388,17 +388,16 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 self.push(value)
             }
             None => {
-                let prop_name = prop_name.clone();
-
                 let class = instance.class.borrow();
-                let name: &InternedString = &prop_name;
 
                 let method = class
                     .methods
                     .raw_entry()
-                    .from_key_hashed_nocheck(name.get_hash(), name);
+                    .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
                 let Some((_, method)) = method else {
-                    let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+                    let kind = RuntimeErrorKind::UndefinedProperty {
+                        name: prop_name.clone(),
+                    };
                     return Err(self.runtime_error(kind, 1));
                 };
                 let method = method.try_to_closure().unwrap();
@@ -418,7 +417,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         // Stack: bottom, .., instance, value_to_set
 
         let instance = self.stack.swap_remove(self.stack.len() - 2);
-        let Some(instance) = instance.try_as_instance() else {
+        let Some(instance) = instance.try_into_instance() else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
@@ -731,11 +730,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .try_as_string()
             .expect("tried to get method name from non string")
             .clone();
-        let class = self
+        let superclass = self
             .stack
             .pop()
             .expect("expected value on stack for op get super");
-        let superclass = class.try_as_class().expect("expected superclass on stack");
+        let superclass = superclass
+            .try_as_class()
+            .expect("expected superclass on stack");
         let superclass = superclass.borrow();
         self.bind_method(&superclass, &method_name)?;
         Ok(())
@@ -920,7 +921,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
                 let instance = Value::new_object(Object::Instance(Rc::new(RefCell::new(instance))));
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
-                self.stack[receiver_slot] = instance.clone();
+                self.stack[receiver_slot] = instance;
                 let class = cls.borrow();
 
                 let initializer = class.methods.raw_entry().from_key_hashed_nocheck(
