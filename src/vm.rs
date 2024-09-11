@@ -24,13 +24,15 @@ use self::error::{RuntimeError, RuntimeErrorKind};
 
 pub mod error;
 
-type Stack<T> = Vec<T>;
+const MAX_FRAMES: usize = 64;
+const STACK_MAX: usize = 1024;
+type Stack<T> = arrayvec::ArrayVec<T, STACK_MAX>;
 
 #[derive(Debug)]
 pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub stack: Stack<Value>,
     pub globals: HashMap<InternedString, Value>,
-    pub call_frames: Vec<CallFrame>,
+    pub call_frames: arrayvec::ArrayVec<CallFrame, MAX_FRAMES>,
     pub frame: CallFrame,
     pub open_upvalues: BTreeMap<usize, Rc<RefCell<ObjUpvalue>>>,
 
@@ -48,9 +50,6 @@ impl Vm {
 }
 
 impl<OUT, OUTERR> Vm<OUT, OUTERR> {
-    const MAX_FRAMES: usize = 64;
-    const STACK_MAX: usize = Self::MAX_FRAMES * (u8::MAX as usize);
-
     pub fn with_output(output: OUT, outerr: OUTERR) -> Self {
         #[cfg(feature = "debug_trace")]
         let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
@@ -59,7 +58,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             frame: CallFrame::new(),
             stack: Stack::new(),
             globals: HashMap::new(),
-            call_frames: Vec::new(),
+            call_frames: arrayvec::ArrayVec::new(),
             open_upvalues: BTreeMap::new(),
             output,
             outerr,
@@ -104,7 +103,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         self.frame.constants = constants.into();
         self.frame.spans = Rc::new(bytecode.spans);
         self.frame.instructions = BytesCursor::new(bytecode.code.into());
-        self.stack.push(Value::Nil);
+        self.push(Value::Nil).unwrap();
         self.frame.slots = 0;
 
         Ok(())
@@ -127,16 +126,21 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
     }
 
+    fn push(&mut self, value: Value) -> Result<(), RuntimeError> {
+        match self.stack.try_push(value) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                let kind = RuntimeErrorKind::Msg("stack overflow".into());
+                Err(self.runtime_error(kind, 1))
+            }
+        }
+    }
+
     fn run_core(&mut self) -> Result<(), RuntimeError>
     where
         for<'b> &'b mut OUT: io::Write,
     {
         while let Some(op) = self.frame.instructions.try_u8().map(OpCode::from_u8) {
-            if self.stack.len() > Self::STACK_MAX {
-                let kind = RuntimeErrorKind::Msg("stack overflow".into());
-                return Err(self.runtime_error(kind, 1));
-            }
-
             #[cfg(feature = "debug_trace")]
             {
                 print!("\n/ [");
@@ -149,37 +153,37 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             }
 
             match op {
-                OpCode::Return => self.run_op_return(),
-                OpCode::Constant => self.run_op_constant(),
+                OpCode::Return => self.run_op_return()?,
+                OpCode::Constant => self.run_op_constant()?,
 
                 OpCode::DefineGlobal => self.run_op_define_global(),
                 OpCode::GetGlobal => self.run_op_get_global()?,
                 OpCode::SetGlobal => self.run_op_set_global()?,
 
-                OpCode::GetLocal => self.run_op_get_local(),
+                OpCode::GetLocal => self.run_op_get_local()?,
                 OpCode::SetLocal => self.run_op_set_local(),
 
-                OpCode::GetUpvalue => self.run_on_get_upvalue(),
+                OpCode::GetUpvalue => self.run_on_get_upvalue()?,
                 OpCode::SetUpvalue => self.run_op_set_upvalue(),
 
                 OpCode::GetProperty => self.run_op_get_property()?,
                 OpCode::SetProperty => self.run_op_set_property()?,
 
                 OpCode::Negate => self.run_op_negate()?,
-                OpCode::Not => self.run_op_not(),
+                OpCode::Not => self.run_op_not()?,
 
                 OpCode::Add => self.run_binary_add()?,
                 OpCode::Subtract => self.binary_arithmetic_op(Self::subtract_number)?,
                 OpCode::Multiply => self.binary_arithmetic_op(Self::multiply_number)?,
                 OpCode::Divide => self.binary_arithmetic_op(Self::divide_number)?,
 
-                OpCode::Eq => self.run_op_eq(),
+                OpCode::Eq => self.run_op_eq()?,
                 OpCode::Lt => self.binary_cmp_op(Self::lt_number)?,
                 OpCode::Gt => self.binary_cmp_op(Self::gt_number)?,
 
-                OpCode::Nil => self.stack.push(Value::Nil),
-                OpCode::True => self.stack.push(Value::Bool(true)),
-                OpCode::False => self.stack.push(Value::Bool(false)),
+                OpCode::Nil => self.push(Value::Nil)?,
+                OpCode::True => self.push(Value::Bool(true))?,
+                OpCode::False => self.push(Value::Bool(false))?,
 
                 OpCode::Print => self.run_op_print(),
                 OpCode::Pop => {
@@ -191,10 +195,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
                 OpCode::Loop => self.run_op_loop(),
                 OpCode::Call => self.run_op_call()?,
-                OpCode::Closure => self.run_op_closure(),
+                OpCode::Closure => self.run_op_closure()?,
                 OpCode::CloseUpvalue => self.run_op_close_upvalue(),
 
-                OpCode::Class => self.run_op_class(),
+                OpCode::Class => self.run_op_class()?,
                 OpCode::Method => self.run_op_method(),
                 OpCode::Invoke => self.run_op_invoke()?,
                 OpCode::Inherit => self.run_op_inherit()?,
@@ -205,22 +209,24 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
-    fn run_op_return(&mut self) {
+    fn run_op_return(&mut self) -> Result<(), RuntimeError> {
         let result = self.stack.pop().expect("expected a return value on stack");
         self.close_upvalues(self.frame.slots);
 
         self.stack.truncate(self.frame.slots);
 
-        self.stack.push(result);
+        self.push(result)?;
         self.frame = self
             .call_frames
             .pop()
             .expect("expected a previous call frame to exist when returning from function");
+
+        Ok(())
     }
 
-    fn run_op_constant(&mut self) {
-        let value = self.frame.expect_constant();
-        self.stack.push(value.clone());
+    fn run_op_constant(&mut self) -> Result<(), RuntimeError> {
+        let value = self.frame.expect_constant().clone();
+        self.push(value)
     }
 
     fn run_op_define_global(&mut self) {
@@ -245,13 +251,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("tried to get global with non string identifier");
 
         if let Some(value) = self.globals.get(name) {
-            self.stack.push(value.clone());
+            self.push(value.clone())
         } else {
             let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
-            return Err(self.runtime_error(kind, 2));
+            Err(self.runtime_error(kind, 2))
         }
-
-        Ok(())
     }
 
     fn run_op_set_global(&mut self) -> Result<(), RuntimeError> {
@@ -280,9 +284,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
-    fn run_op_get_local(&mut self) {
+    fn run_op_get_local(&mut self) -> Result<(), RuntimeError> {
         let value = self.expect_local().clone();
-        self.stack.push(value);
+        self.push(value)
     }
 
     fn run_op_set_local(&mut self) {
@@ -293,20 +297,18 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .clone();
     }
 
-    fn run_on_get_upvalue(&mut self) {
+    fn run_on_get_upvalue(&mut self) -> Result<(), RuntimeError> {
         let upvalue = self.frame.expect_upvalue();
-        match &*upvalue {
-            ObjUpvalue::Open(stack_idx) => {
-                let value = self
-                    .stack
-                    .get(*stack_idx)
-                    .expect("tried to get upvalue at invalid stack index");
-                self.stack.push(value.clone());
-            }
-            ObjUpvalue::Closed(value) => {
-                self.stack.push(value.clone());
-            }
-        }
+        let value = match &*upvalue {
+            ObjUpvalue::Open(stack_idx) => self
+                .stack
+                .get(*stack_idx)
+                .expect("tried to get upvalue at invalid stack index")
+                .clone(),
+            ObjUpvalue::Closed(value) => value.clone(),
+        };
+        drop(upvalue);
+        self.push(value)
     }
 
     fn run_op_set_upvalue(&mut self) {
@@ -354,7 +356,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 let value = value.clone();
                 drop(instance);
                 self.stack.pop(); // instance
-                self.stack.push(value);
+                self.push(value)
             }
             None => {
                 let prop_name = prop_name.clone();
@@ -373,11 +375,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 let method = ObjBoundMethod::new(receiver, method);
                 let method = Value::new_bound_method(method);
 
-                self.stack.push(method);
+                self.push(method)
             }
         }
-
-        Ok(())
     }
 
     fn run_op_set_property(&mut self) -> Result<(), RuntimeError> {
@@ -411,25 +411,23 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("tried to negate with no value on stack");
 
         if let Value::Number(v) = value {
-            self.stack.push(Value::Number(-v));
+            self.push(Value::Number(-v))
         } else {
             let kind = RuntimeErrorKind::InvalidOperand { expected: "number" };
-            return Err(self.runtime_error(kind, 1));
+            Err(self.runtime_error(kind, 1))
         }
-
-        Ok(())
     }
 
-    fn run_op_not(&mut self) {
+    fn run_op_not(&mut self) -> Result<(), RuntimeError> {
         let value = self
             .stack
             .pop()
             .expect("tried to not with no value on stack");
 
-        self.stack.push(Value::Bool(value.is_falsey()));
+        self.push(Value::Bool(value.is_falsey()))
     }
 
-    fn run_op_eq(&mut self) {
+    fn run_op_eq(&mut self) -> Result<(), RuntimeError> {
         let rhs = self
             .stack
             .pop()
@@ -439,7 +437,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to eq with no lhs value on stack");
 
-        self.stack.push(Value::Bool(lhs == rhs));
+        self.push(Value::Bool(lhs == rhs))
     }
 
     fn run_op_print(&mut self)
@@ -514,7 +512,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
-    fn run_op_closure(&mut self) {
+    fn run_op_closure(&mut self) -> Result<(), RuntimeError> {
         let fun = self
             .frame
             .expect_constant()
@@ -563,7 +561,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
 
         let closure = Value::new_closure(ObjClosure::new(fun, upvalues));
-        self.stack.push(closure);
+        self.push(closure)
     }
 
     fn run_op_close_upvalue(&mut self) {
@@ -571,7 +569,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         self.stack.pop();
     }
 
-    fn run_op_class(&mut self) {
+    fn run_op_class(&mut self) -> Result<(), RuntimeError> {
         let name = self
             .frame
             .expect_constant()
@@ -579,7 +577,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("tried to get class name from non string");
 
         let class = Value::new_class(ObjClass::new(name));
-        self.stack.push(class);
+        self.push(class)
     }
 
     fn run_op_method(&mut self) {
@@ -740,8 +738,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let method = ObjBoundMethod::new(receiver, method);
         let method = Value::new_bound_method(method);
 
-        self.stack.push(method);
-        Ok(())
+        self.push(method)
     }
 
     fn close_upvalues(&mut self, idx: usize) {
@@ -836,9 +833,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 );
                 self.stack
                     .truncate(self.stack.len() - arg_count as usize - 1);
-                self.stack.push(result);
-
-                Ok(())
+                self.push(result)
             }
             Value::Object(Object::Class(cls)) => {
                 let instance = ObjInstance::new(Rc::clone(&cls));
@@ -859,7 +854,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
                 // self.stack
                 //     .truncate(self.stack.len() - arg_count as usize - 1);
-                // self.stack.push(instance);
+                // self.push(instance);
                 Ok(())
             }
             Value::Object(Object::BoundMethod(method)) => {
@@ -952,35 +947,31 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let lhs = self.stack.pop();
         match (lhs, rhs) {
             (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.stack.push(Value::Number(op(lhs, rhs)));
+                self.push(Value::Number(op(lhs, rhs)))
             }
             (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => match (lhs, rhs) {
                 (Object::String(lhs), Object::String(rhs)) => {
                     let new = lhs.to_string() + &rhs;
                     let new = STRING_INTERNER.lock().unwrap().intern(new);
-                    self.stack.push(Value::new_object(Object::String(new)));
+                    self.push(Value::new_object(Object::String(new)))
                 }
                 _ => {
                     let kind = RuntimeErrorKind::InvalidOperands {
                         expected: "two numbers or string",
                     };
-                    return Err(self.runtime_error(kind, 1));
+                    Err(self.runtime_error(kind, 1))
                 }
             },
             (Some(lhs), Some(rhs)) => {
-                self.stack.push(lhs);
-                self.stack.push(rhs);
                 let kind = RuntimeErrorKind::InvalidOperands {
                     expected: "two numbers or string",
                 };
-                return Err(self.runtime_error(kind, 1));
+                Err(self.runtime_error(kind, 1))
             }
             _ => {
                 panic!("tried to do binary add with not enough values on stack")
             }
         }
-
-        Ok(())
     }
 
     #[inline]
@@ -989,20 +980,16 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let lhs = self.stack.pop();
         match (lhs, rhs) {
             (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.stack.push(Value::Number(op(lhs, rhs)));
+                self.push(Value::Number(op(lhs, rhs)))
             }
             (Some(lhs), Some(rhs)) => {
-                self.stack.push(lhs);
-                self.stack.push(rhs);
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
+                Err(self.runtime_error(kind, 1))
             }
             _ => {
                 panic!("tried to do arithmetic binary op with not enough values on stack")
             }
         }
-
-        Ok(())
     }
 
     #[inline]
@@ -1011,19 +998,16 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let lhs = self.stack.pop();
         match (lhs, rhs) {
             (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.stack.push(Value::Bool(op(lhs, rhs)));
+                self.push(Value::Bool(op(lhs, rhs)))
             }
             (Some(lhs), Some(rhs)) => {
-                self.stack.push(lhs);
-                self.stack.push(rhs);
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
-                return Err(self.runtime_error(kind, 1));
+                Err(self.runtime_error(kind, 1))
             }
             _ => {
                 panic!("tried to do cmp binary op with not enough values on stack")
             }
         }
-        Ok(())
     }
 
     #[inline]
