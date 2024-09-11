@@ -1,10 +1,12 @@
 use core::fmt;
 use std::borrow::{Borrow, Cow};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::hash::BuildHasher as _;
 use std::ops;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
+
+use hashbrown::HashMap;
 
 use crate::bytecode::ByteCode;
 use crate::common::Span;
@@ -258,8 +260,49 @@ impl PartialEq for Object {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct InternedString(Arc<String>);
+#[derive(Clone, PartialEq, Eq)]
+pub struct InternedString(Arc<InternedStringCore>);
+
+impl std::hash::Hash for InternedString {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let inner: &InternedStringCore = &self.0;
+        inner.hash(state)
+    }
+}
+
+#[derive(Debug)]
+struct InternedStringCore {
+    hash: u64,
+    value: String,
+}
+
+impl InternedStringCore {
+    fn new(value: String) -> Self {
+        let hasher = BuildHasher::default();
+        let hash = hasher.hash_one(&value);
+        Self { hash, value }
+    }
+}
+
+impl PartialEq for InternedStringCore {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for InternedStringCore {}
+
+impl std::hash::Hash for InternedStringCore {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+impl fmt::Display for InternedStringCore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
 
 impl fmt::Debug for InternedString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -275,32 +318,36 @@ impl fmt::Display for InternedString {
 
 impl InternedString {
     pub fn new(s: String) -> Self {
-        Self(Arc::new(s))
+        Self(Arc::new(InternedStringCore::new(s)))
+    }
+
+    pub fn get_hash(&self) -> u64 {
+        self.0.hash
     }
 }
 
 impl ops::Deref for InternedString {
     type Target = String;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.0.value
     }
 }
 
 impl Borrow<String> for InternedString {
     fn borrow(&self) -> &String {
-        &self.0
+        &self.0.value
     }
 }
 
 impl Borrow<str> for InternedString {
     fn borrow(&self) -> &str {
-        &self.0
+        &self.0.value
     }
 }
 
 impl AsRef<str> for InternedString {
     fn as_ref(&self) -> &str {
-        &self.0
+        &self.0.value
     }
 }
 

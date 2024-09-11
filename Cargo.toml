@@ -11,6 +11,7 @@ thiserror = "1.0.63"
 clap = { version = "4.5.17", features = ["derive"] }
 arrayvec = "0.7.6"
 fnv = "1.0.7"
+hashbrown = "0.14.5"
 
 [dev-dependencies]
 insta = "1.40.0"
@@ -28,3 +29,6 @@ new_without_default = "allow"
 debug_trace = []
 debug_disassemble = []
 default = []
+
+[profile.release]
+debug = true

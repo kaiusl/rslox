@@ -1,16 +1,17 @@
 use core::panic;
 use std::cell::{RefCell, RefMut};
-use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::rc::Rc;
 use std::sync::{LazyLock, Mutex};
 
 use fnv::FnvBuildHasher;
+use hashbrown::hash_map::{Entry, RawEntryMut, RawVacantEntryMut};
+use hashbrown::{HashMap, HashSet};
 
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
-use crate::compiler::Compiler;
+use crate::compiler;
 use crate::value::{
     InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjInstance, ObjUpvalue,
     Object, Value,
@@ -241,10 +242,21 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("tried to define global with non string identifier");
         let value = self
             .stack
-            .last()
+            .pop()
             .expect("tried to define global with no value on stack");
-        self.globals.insert(name.clone(), value.clone());
-        self.stack.pop();
+
+        let entry = self
+            .globals
+            .raw_entry_mut()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+        match entry {
+            RawEntryMut::Vacant(entry) => {
+                entry.insert_hashed_nocheck(name.get_hash(), name.clone(), value);
+            }
+            RawEntryMut::Occupied(mut entry) => {
+                entry.insert(value);
+            }
+        }
     }
 
     fn run_op_get_global(&mut self) -> Result<(), RuntimeError> {
@@ -254,7 +266,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .try_as_string()
             .expect("tried to get global with non string identifier");
 
-        if let Some(value) = self.globals.get(name) {
+        let raw_entry = self
+            .globals
+            .raw_entry()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+
+        if let Some((_, value)) = raw_entry {
             self.push(value.clone())
         } else {
             let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
@@ -266,11 +283,16 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to set global with non string identifier");
 
-        match self.globals.entry(name) {
-            Entry::Occupied(mut entry) => {
+        let entry = self
+            .globals
+            .raw_entry_mut()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+
+        match entry {
+            RawEntryMut::Occupied(mut entry) => {
                 let value = self
                     .stack
                     .last()
@@ -278,10 +300,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .clone();
                 entry.insert(value);
             }
-            Entry::Vacant(entry) => {
-                let kind = RuntimeErrorKind::UndefinedVariable {
-                    name: entry.into_key(),
-                };
+            RawEntryMut::Vacant(_) => {
+                let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
                 return Err(self.runtime_error(kind, 2));
             }
         }
@@ -354,9 +374,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect_constant()
             .try_as_string()
             .expect("tried to get property name from non string");
-        let prop_value = instance.properties.get(prop_name);
+
+        let prop_value = instance
+            .properties
+            .raw_entry()
+            .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
+
         match prop_value {
-            Some(value) => {
+            Some((_, value)) => {
                 let value = value.clone();
                 drop(instance);
                 self.stack.pop(); // instance
@@ -367,7 +392,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
                 let class = instance.class.borrow();
                 let name: &InternedString = &prop_name;
-                let Some(method) = class.methods.get(name) else {
+
+                let method = class
+                    .methods
+                    .raw_entry()
+                    .from_key_hashed_nocheck(name.get_hash(), name);
+                let Some((_, method)) = method else {
                     let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
                     return Err(self.runtime_error(kind, 1));
                 };
@@ -395,7 +425,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to set property name from non string");
         let value = self
             .stack
@@ -403,7 +433,23 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("expected value on the stack to set property")
             .clone();
 
-        instance.borrow_mut().properties.insert(name, value);
+        let mut instance = instance.borrow_mut();
+        let properties = &mut instance.properties;
+
+        // Use raw_entry_mut to avoid rehashing and cloning the name for existing properties
+        // It's quite common operation to set the same property multiple times
+        let property = properties
+            .raw_entry_mut()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+
+        match property {
+            hashbrown::hash_map::RawEntryMut::Occupied(mut entry) => {
+                entry.insert(value);
+            }
+            hashbrown::hash_map::RawEntryMut::Vacant(entry) => {
+                entry.insert_hashed_nocheck(name.get_hash(), name.clone(), value);
+            }
+        }
 
         Ok(())
     }
@@ -607,7 +653,18 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             panic!("expected a closure on stack to be defined as class method");
         }
 
-        class.borrow_mut().methods.insert(name, method);
+        let methods = &mut class.borrow_mut().methods;
+        let method_entry = methods
+            .raw_entry_mut()
+            .from_key_hashed_nocheck(name.get_hash(), &name);
+        match method_entry {
+            RawEntryMut::Vacant(entry) => {
+                entry.insert_hashed_nocheck(name.get_hash(), name, method);
+            }
+            RawEntryMut::Occupied(mut entry) => {
+                entry.insert(method);
+            }
+        }
     }
 
     fn run_op_invoke(&mut self) -> Result<(), RuntimeError> {
@@ -694,7 +751,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         let instance = instance.borrow();
 
-        if let Some(field) = instance.properties.get(name) {
+        let field = instance
+            .properties
+            .raw_entry()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+
+        if let Some((_, field)) = field {
             let idx = self.stack.len() - arg_count as usize - 1;
             let field = field.clone();
             drop(instance);
@@ -703,8 +765,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
 
         let class = instance.class.borrow();
+        let method = class
+            .methods
+            .raw_entry()
+            .from_key_hashed_nocheck(name.get_hash(), name);
 
-        let Some(method) = class.methods.get(name) else {
+        let Some((_, method)) = method else {
             let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
             return Err(self.runtime_error(kind, 1));
         };
@@ -721,7 +787,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         name: &InternedString,
         arg_count: u8,
     ) -> Result<(), RuntimeError> {
-        let Some(method) = class.methods.get(name) else {
+        let method = class
+            .methods
+            .raw_entry()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+
+        let Some((_, method)) = method else {
             let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
             return Err(self.runtime_error(kind, 1));
         };
@@ -732,7 +803,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn bind_method(&mut self, class: &ObjClass, name: &InternedString) -> Result<(), RuntimeError> {
-        let Some(method) = class.methods.get(name) else {
+        let method = class
+            .methods
+            .raw_entry()
+            .from_key_hashed_nocheck(name.get_hash(), name);
+
+        let Some((_, method)) = method else {
             let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
             return Err(self.runtime_error(kind, 1));
         };
@@ -845,8 +921,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 let instance = Value::new_object(Object::Instance(Rc::new(RefCell::new(instance))));
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = instance.clone();
-                let borrow = cls.borrow();
-                if let Some(initializer) = borrow.methods.get(Compiler::INIT_METHOD_NAME) {
+                let class = cls.borrow();
+
+                let initializer = class.methods.raw_entry().from_key_hashed_nocheck(
+                    compiler::INIT_METHOD_NAME.get_hash(),
+                    &*compiler::INIT_METHOD_NAME,
+                );
+
+                if let Some((_, initializer)) = initializer {
                     let initializer = initializer.try_to_closure().unwrap();
                     self.call_closure(initializer, arg_count)?;
                 } else if arg_count != 0 {
@@ -1137,16 +1219,6 @@ impl StringInterner {
                 let new = InternedString::new(s.into());
                 self.strings.insert(new.clone());
                 new
-            }
-        }
-    }
-
-    pub fn intern_existing(&mut self, s: InternedString) -> InternedString {
-        match self.strings.get(&s) {
-            Some(existing) => existing.clone(),
-            None => {
-                self.strings.insert(s.clone());
-                s
             }
         }
     }

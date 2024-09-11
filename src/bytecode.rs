@@ -1,7 +1,8 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::{fmt, mem};
+
+use hashbrown::HashMap;
 
 use crate::common::Span;
 use crate::disassembler::DisassemblerError;

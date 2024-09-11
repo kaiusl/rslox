@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::LazyLock;
 
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
@@ -84,9 +85,10 @@ impl CompileUnit {
     }
 }
 
-impl<'a> Compiler<'a> {
-    pub const INIT_METHOD_NAME: &'static str = "init";
+pub static INIT_METHOD_NAME: LazyLock<InternedString> =
+    LazyLock::new(|| InternedString::new("init".into()));
 
+impl<'a> Compiler<'a> {
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(source: &'a str) -> Self {
         //let mut locals = Vec::with_capacity(1);
@@ -257,7 +259,7 @@ impl<'a> Compiler<'a> {
         let span = ident.span.clone();
         let const_idx = self.compile_ident_constant(ident.clone())?;
 
-        let fun_type = if ident.item == Self::INIT_METHOD_NAME {
+        let fun_type = if ident.item == **INIT_METHOD_NAME {
             FunType::Initializer
         } else {
             FunType::Method
