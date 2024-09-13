@@ -59,7 +59,10 @@ impl Disassembler {
                 }
 
                 if let Instruction::Closure(idx) = op {
-                    let fun = &self.constants[idx as usize].try_to_function().unwrap();
+                    let fun = &self.constants[idx as usize]
+                        .try_as_function()
+                        .unwrap()
+                        .to_rc();
                     for _ in 0..fun.upvalues_count {
                         let is_local = self.cursor.try_u8().unwrap();
                         let index = self.cursor.try_u8().unwrap();

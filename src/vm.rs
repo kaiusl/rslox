@@ -3,7 +3,7 @@ use std::cell::{RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::rc::Rc;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use fnv::FnvBuildHasher;
 use hashbrown::hash_map::{Entry, RawEntryMut, RawVacantEntryMut};
@@ -13,8 +13,8 @@ use crate::bytecode::{BytesCursor, OpCode};
 use crate::common::Span;
 use crate::compiler;
 use crate::value::{
-    InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjInstance, ObjUpvalue,
-    Object, Value,
+    ArcRef, InternedString, InternedStringCore, NativeFn, ObjBoundMethod, ObjClass, ObjClosure,
+    ObjInstance, ObjUpvalue,  Str, Value,
 };
 
 pub(crate) type BuildHasher = FnvBuildHasher;
@@ -108,7 +108,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         self.frame.constants = constants.into();
         self.frame.spans = Rc::new(bytecode.spans);
         self.frame.instructions = BytesCursor::new(bytecode.code.into());
-        self.push(Value::Nil).unwrap();
+        self.push(Value::NIL).unwrap();
         self.frame.slots = 0;
 
         Ok(())
@@ -131,6 +131,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
     }
 
+    #[inline]
     fn push(&mut self, value: Value) -> Result<(), RuntimeError> {
         match self.stack.try_push(value) {
             Ok(_) => Ok(()),
@@ -186,9 +187,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 OpCode::Lt => self.binary_cmp_op(Self::lt_number)?,
                 OpCode::Gt => self.binary_cmp_op(Self::gt_number)?,
 
-                OpCode::Nil => self.push(Value::Nil)?,
-                OpCode::True => self.push(Value::Bool(true))?,
-                OpCode::False => self.push(Value::Bool(false))?,
+                OpCode::Nil => self.push(Value::NIL)?,
+                OpCode::True => self.push(Value::TRUE)?,
+                OpCode::False => self.push(Value::FALSE)?,
 
                 OpCode::Print => self.run_op_print(),
                 OpCode::Pop => {
@@ -214,6 +215,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
+    #[inline]
     fn run_op_return(&mut self) -> Result<(), RuntimeError> {
         let result = self.stack.pop().expect("expected a return value on stack");
         self.close_upvalues(self.frame.slots);
@@ -229,6 +231,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
+    #[inline]
     fn run_op_constant(&mut self) -> Result<(), RuntimeError> {
         let value = self.frame.expect_constant().clone();
         self.push(value)
@@ -248,10 +251,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let entry = self
             .globals
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
         match entry {
             RawEntryMut::Vacant(entry) => {
-                entry.insert_hashed_nocheck(name.get_hash(), name.clone(), value);
+                entry.insert_hashed_nocheck(name.get_hash(), InternedString(name.to_arc()), value);
             }
             RawEntryMut::Occupied(mut entry) => {
                 entry.insert(value);
@@ -269,12 +272,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let raw_entry = self
             .globals
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
 
         if let Some((_, value)) = raw_entry {
             self.push(value.clone())
         } else {
-            let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
+            let kind = RuntimeErrorKind::UndefinedVariable {
+                name: InternedString(name.to_arc()),
+            };
             Err(self.runtime_error(kind, 2))
         }
     }
@@ -289,7 +294,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let entry = self
             .globals
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
 
         match entry {
             RawEntryMut::Occupied(mut entry) => {
@@ -301,18 +306,22 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 entry.insert(value);
             }
             RawEntryMut::Vacant(_) => {
-                let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
+                let kind = RuntimeErrorKind::UndefinedVariable {
+                    name: InternedString(name.to_arc()),
+                };
                 return Err(self.runtime_error(kind, 2));
             }
         }
         Ok(())
     }
 
+    #[inline]
     fn run_op_get_local(&mut self) -> Result<(), RuntimeError> {
         let value = self.expect_local().clone();
         self.push(value)
     }
 
+    #[inline]
     fn run_op_set_local(&mut self) {
         *self.expect_local() = self
             .stack
@@ -378,7 +387,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let prop_value = instance
             .properties
             .raw_entry()
-            .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
+            .from_key_hashed_nocheck(prop_name.get_hash(), &*prop_name);
 
         match prop_value {
             Some((_, value)) => {
@@ -393,10 +402,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 let method = class
                     .methods
                     .raw_entry()
-                    .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
+                    .from_key_hashed_nocheck(prop_name.get_hash(), &*prop_name);
                 let Some((_, method)) = method else {
                     let kind = RuntimeErrorKind::UndefinedProperty {
-                        name: prop_name.clone(),
+                        name: InternedString(prop_name.to_arc()),
                     };
                     return Err(self.runtime_error(kind, 1));
                 };
@@ -406,7 +415,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
                 let receiver = self.stack.pop().expect("expected receiver on stack");
                 let method = ObjBoundMethod::new(receiver, method);
-                let method = Value::new_bound_method(method);
+                let method = Value::new_bound_method(Rc::new(method));
 
                 self.push(method)
             }
@@ -417,7 +426,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         // Stack: bottom, .., instance, value_to_set
 
         let instance = self.stack.swap_remove(self.stack.len() - 2);
-        let Some(instance) = instance.try_into_instance() else {
+        let Some(instance) = instance.try_as_instance() else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
@@ -439,14 +448,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         // It's quite common operation to set the same property multiple times
         let property = properties
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
 
         match property {
             hashbrown::hash_map::RawEntryMut::Occupied(mut entry) => {
                 entry.insert(value);
             }
             hashbrown::hash_map::RawEntryMut::Vacant(entry) => {
-                entry.insert_hashed_nocheck(name.get_hash(), name.clone(), value);
+                entry.insert_hashed_nocheck(name.get_hash(), InternedString(name.to_arc()), value);
             }
         }
 
@@ -459,8 +468,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to negate with no value on stack");
 
-        if let Value::Number(v) = value {
-            self.push(Value::Number(-v))
+        if value.is_number() {
+            let v = value.try_to_number().unwrap();
+            self.push(Value::new_number(-v))
         } else {
             let kind = RuntimeErrorKind::InvalidOperand { expected: "number" };
             Err(self.runtime_error(kind, 1))
@@ -473,7 +483,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to not with no value on stack");
 
-        self.push(Value::Bool(value.is_falsey()))
+        self.push(Value::new_bool(value.is_falsey()))
     }
 
     fn run_op_eq(&mut self) -> Result<(), RuntimeError> {
@@ -486,7 +496,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to eq with no lhs value on stack");
 
-        self.push(Value::Bool(lhs == rhs))
+        self.push(Value::new_bool(lhs == rhs))
     }
 
     fn run_op_print(&mut self)
@@ -524,6 +534,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
     }
 
+    #[inline]
     fn run_op_jump(&mut self) {
         let offset = self
             .frame
@@ -565,8 +576,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let fun = self
             .frame
             .expect_constant()
-            .try_to_function()
-            .expect("expected a function on stack for op closure");
+            .try_as_function()
+            .expect("expected a function on stack for op closure")
+            .to_rc();
 
         #[cfg(feature = "debug_disassemble")]
         {
@@ -609,7 +621,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             upvalues.push(upvalue);
         }
 
-        let closure = Value::new_closure(ObjClosure::new(fun, upvalues));
+        let closure = Value::new_closure(Rc::new(ObjClosure::new(fun, upvalues)));
         self.push(closure)
     }
 
@@ -622,10 +634,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
-            .expect("tried to get class name from non string");
+            .try_as_string()
+            .expect("tried to get class name from non string")
+            .to_arc();
 
-        let class = Value::new_class(ObjClass::new(name));
+        let class = Value::new_class(Rc::new(RefCell::new(ObjClass::new(InternedString(name)))));
         self.push(class)
     }
 
@@ -635,8 +648,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
-            .expect("tried to get method name from non string");
+            .try_as_string()
+            .expect("tried to get method name from non string")
+            .to_arc();
         let method = self
             .stack
             .pop()
@@ -655,10 +669,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let methods = &mut class.borrow_mut().methods;
         let method_entry = methods
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), &name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
         match method_entry {
             RawEntryMut::Vacant(entry) => {
-                entry.insert_hashed_nocheck(name.get_hash(), name, method);
+                entry.insert_hashed_nocheck(name.get_hash(), InternedString(name), method);
             }
             RawEntryMut::Occupied(mut entry) => {
                 entry.insert(method);
@@ -687,8 +701,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("expected a second u8 operand for op invoke");
 
         // TODO: remove this technically unnecessary clone, but borrow checker complains atm, because we are borrowing from self
-        let name = name.clone();
-        self.invoke(&name, arg_count)?;
+        let name = name.to_arc();
+        let name_ref = ArcRef::new(&name);
+        self.invoke(name_ref, arg_count)?;
         Ok(())
     }
 
@@ -729,7 +744,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect_constant()
             .try_as_string()
             .expect("tried to get method name from non string")
-            .clone();
+            .to_arc();
+        let method_name = ArcRef::new(&method_name);
         let superclass = self
             .stack
             .pop()
@@ -738,11 +754,15 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .try_as_class()
             .expect("expected superclass on stack");
         let superclass = superclass.borrow();
-        self.bind_method(&superclass, &method_name)?;
+        self.bind_method(&superclass, method_name)?;
         Ok(())
     }
 
-    fn invoke(&mut self, name: &InternedString, arg_count: u8) -> Result<(), RuntimeError> {
+    fn invoke(
+        &mut self,
+        name: ArcRef<'_, InternedStringCore>,
+        arg_count: u8,
+    ) -> Result<(), RuntimeError> {
         let Some(instance) =
             self.stack[self.stack.len() - arg_count as usize - 1].try_as_instance()
         else {
@@ -755,7 +775,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let field = instance
             .properties
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
 
         if let Some((_, field)) = field {
             let idx = self.stack.len() - arg_count as usize - 1;
@@ -769,10 +789,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let method = class
             .methods
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
 
         let Some((_, method)) = method else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+            let kind = RuntimeErrorKind::UndefinedProperty {
+                name: InternedString(name.to_arc()),
+            };
             return Err(self.runtime_error(kind, 1));
         };
 
@@ -803,21 +825,27 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         self.call_closure(method, arg_count)
     }
 
-    fn bind_method(&mut self, class: &ObjClass, name: &InternedString) -> Result<(), RuntimeError> {
+    fn bind_method(
+        &mut self,
+        class: &ObjClass,
+        name: ArcRef<'_, InternedStringCore>,
+    ) -> Result<(), RuntimeError> {
         let method = class
             .methods
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &*name);
 
         let Some((_, method)) = method else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+            let kind = RuntimeErrorKind::UndefinedProperty {
+                name: InternedString(name.to_arc()),
+            };
             return Err(self.runtime_error(kind, 1));
         };
         let method = method.try_to_closure().unwrap();
 
         let receiver = self.stack.pop().expect("expected receiver on stack");
         let method = ObjBoundMethod::new(receiver, method);
-        let method = Value::new_bound_method(method);
+        let method = Value::new_bound_method(Rc::new(method));
 
         self.push(method)
     }
@@ -828,8 +856,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 // Make sure not to create a Rc cycle
                 let mut value = self.stack[*last.key()].clone();
 
-                match &value {
-                    Value::Object(Object::Class(cls)) => {
+                match value.get_tag() {
+                    Value::TAG_CLASS => {
                         // One way to create cycle is if upvalue is a class and it's methods hold these upvalues
                         // Since we are closing the upvalue of class, then the class must be leaving the stack.
                         // This means that the closure should become the owner of the class and the class should not have a strong reference to that closure.
@@ -839,6 +867,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         // or they will be removed.
                         //
                         // In summary, we must make all references from the class to the closure weak, where the closure has an upvalue to the class.
+                        let cls = value.try_as_class().unwrap();
                         let mut class = cls.borrow_mut();
 
                         for m in class.methods.values_mut() {
@@ -855,12 +884,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                             }
 
                             if has_self_ref {
-                                *m = m.to_weak();
+                                m.convert_to_weak();
                             }
                         }
                     }
-                    Value::Object(Object::Closure(closure)) => {
+                    Value::TAG_CLOSURE => {
                         // A self referential closure will have an upvalue that points to itself, that upvalue needs to be a weak reference
+                        let closure = value.try_as_closure().unwrap();
                         let mut has_self_ref = false;
                         for u in closure.upvalues.iter() {
                             let u = u.borrow();
@@ -873,7 +903,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                         }
 
                         if has_self_ref {
-                            value = value.to_weak();
+                            value = value.into_weak();
                         }
                     }
                     _ => {}
@@ -904,10 +934,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
-        match callee {
-            Value::Object(Object::Closure(fun)) => self.call_closure(fun, arg_count),
+        match callee.get_tag() {
+            Value::TAG_CLOSURE => {
+                let fun = unsafe { callee.into_closure_unchecked() };
+                self.call_closure(fun, arg_count)
+            }
             //Value::Object(Object::Function(fun)) => self.call_function(&fun, arg_count),
-            Value::Object(Object::NativeFn(fun)) => {
+            Value::TAG_NATIVE_FN => {
+                let fun = unsafe { callee.into_native_fn_unchecked() };
                 let result = fun(
                     arg_count,
                     &self.stack[self.stack.len() - arg_count as usize..],
@@ -916,10 +950,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .truncate(self.stack.len() - arg_count as usize - 1);
                 self.push(result)
             }
-            Value::Object(Object::Class(cls)) => {
+            Value::TAG_CLASS => {
+                let cls = unsafe { callee.into_class_unchecked() };
+
                 let instance = ObjInstance::new(Rc::clone(&cls));
 
-                let instance = Value::new_object(Object::Instance(Rc::new(RefCell::new(instance))));
+                let instance = Value::new_instance(Rc::new(RefCell::new(instance)));
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = instance;
                 let class = cls.borrow();
@@ -944,7 +980,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 // self.push(instance);
                 Ok(())
             }
-            Value::Object(Object::BoundMethod(method)) => {
+            Value::TAG_BOUND_METHOD => {
+                let method = unsafe { callee.into_bound_method_unchecked() };
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = method.receiver.clone();
                 self.call_closure(Rc::clone(&method.method), arg_count)
@@ -959,8 +996,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn define_native(&mut self, name: impl Into<String> + AsRef<str>, fun: NativeFn) {
         let name = STRING_INTERNER.lock().unwrap().intern(name);
-        let fun = Object::NativeFn(Rc::new(fun));
-        let fun = Value::new_object(fun);
+        let fun = Rc::new(fun);
+        let fun = Value::new_native_fn(fun);
         self.globals.insert(name, fun);
     }
 
@@ -970,7 +1007,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("expected current time to be after unix epoch")
             .as_secs_f64();
 
-        Value::Number(time)
+        Value::new_number(time)
     }
 
     fn call_closure(&mut self, closure: Rc<ObjClosure>, arg_count: u8) -> Result<(), RuntimeError> {
@@ -1030,69 +1067,53 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn run_binary_add(&mut self) -> Result<(), RuntimeError> {
         let op = Self::add_number;
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
-        match (lhs, rhs) {
-            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.push(Value::Number(op(lhs, rhs)))
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        if let (Some(lhs), Some(rhs)) = (lhs.try_to_number(), rhs.try_to_number()) {
+            return self.push(Value::new_number(op(lhs, rhs)));
+        }
+
+        match (lhs.get_tag(), rhs.get_tag()) {
+            (Value::TAG_STRING, Value::TAG_STRING) => {
+                let lhs = lhs.try_as_string().unwrap();
+                let rhs = rhs.try_as_string().unwrap();
+                let new = lhs.to_string() + &rhs;
+                let new = InternedStringCore::new(new);
+                let new = STRING_INTERNER.lock().unwrap().intern(new);
+                self.push(Value::new_string(new))
             }
-            (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => match (lhs, rhs) {
-                (Object::String(lhs), Object::String(rhs)) => {
-                    let new = lhs.to_string() + &rhs;
-                    let new = STRING_INTERNER.lock().unwrap().intern(new);
-                    self.push(Value::new_object(Object::String(new)))
-                }
-                _ => {
-                    let kind = RuntimeErrorKind::InvalidOperands {
-                        expected: "two numbers or string",
-                    };
-                    Err(self.runtime_error(kind, 1))
-                }
-            },
-            (Some(lhs), Some(rhs)) => {
+            _ => {
                 let kind = RuntimeErrorKind::InvalidOperands {
                     expected: "two numbers or string",
                 };
                 Err(self.runtime_error(kind, 1))
-            }
-            _ => {
-                panic!("tried to do binary add with not enough values on stack")
             }
         }
     }
 
     #[inline]
     fn binary_arithmetic_op(&mut self, op: impl Fn(f64, f64) -> f64) -> Result<(), RuntimeError> {
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
-        match (lhs, rhs) {
-            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.push(Value::Number(op(lhs, rhs)))
-            }
-            (Some(lhs), Some(rhs)) => {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        match (lhs.try_to_number(), rhs.try_to_number()) {
+            (Some(lhs), Some(rhs)) => self.push(Value::new_number(op(lhs, rhs))),
+            _ => {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 Err(self.runtime_error(kind, 1))
-            }
-            _ => {
-                panic!("tried to do arithmetic binary op with not enough values on stack")
             }
         }
     }
 
     #[inline]
     fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError> {
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
-        match (lhs, rhs) {
-            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.push(Value::Bool(op(lhs, rhs)))
-            }
-            (Some(lhs), Some(rhs)) => {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        match (lhs.try_to_number(), rhs.try_to_number()) {
+            (Some(lhs), Some(rhs)) => self.push(Value::new_bool(op(lhs, rhs))),
+            _ => {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 Err(self.runtime_error(kind, 1))
-            }
-            _ => {
-                panic!("tried to do cmp binary op with not enough values on stack")
             }
         }
     }
@@ -1202,7 +1223,7 @@ impl CallFrame {
 
 #[derive(Debug)]
 pub struct StringInterner {
-    strings: HashSet<InternedString, BuildHasher>,
+    strings: hashbrown::HashSet<InternedString, BuildHasher>,
 }
 
 impl StringInterner {
@@ -1213,8 +1234,8 @@ impl StringInterner {
     }
 
     pub fn intern(&mut self, s: impl Into<String> + AsRef<str>) -> InternedString {
-        let s_ref = s.as_ref();
-        match self.strings.get(s_ref) {
+        let s_ref = Str(s.as_ref());
+        match self.strings.get(&s_ref) {
             Some(existing) => existing.clone(),
             None => {
                 let new = InternedString::new(s.into());

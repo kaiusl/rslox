@@ -1,3 +1,5 @@
+#![feature(strict_provenance)]
+
 pub mod bytecode;
 pub mod common;
 pub mod compiler;

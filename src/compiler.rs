@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
-use crate::value::{InternedString, ObjFunction, Object, Value};
+use crate::value::{InternedString, ObjFunction, Value};
 use crate::vm::STRING_INTERNER;
 
 use num_traits::FromPrimitive;
@@ -86,7 +86,7 @@ impl CompileUnit {
 }
 
 pub static INIT_METHOD_NAME: LazyLock<InternedString> =
-    LazyLock::new(|| InternedString::new("init".into()));
+    LazyLock::new(|| STRING_INTERNER.lock().unwrap().intern("init"));
 
 impl<'a> Compiler<'a> {
     #[allow(clippy::should_implement_trait)]
@@ -259,7 +259,7 @@ impl<'a> Compiler<'a> {
         let span = ident.span.clone();
         let const_idx = self.compile_ident_constant(ident.clone())?;
 
-        let fun_type = if ident.item == **INIT_METHOD_NAME {
+        let fun_type = if ident.item == ***INIT_METHOD_NAME {
             FunType::Initializer
         } else {
             FunType::Method
@@ -358,7 +358,7 @@ impl<'a> Compiler<'a> {
             arity,
             function_bytecode.upvalues.len(),
         );
-        let fun = Value::Object(Object::Function(Rc::new(fun)));
+        let fun = Value::new_function(Rc::new(fun));
 
         let span = fun_kw.map(|s| s.span).unwrap_or_else(|| name.span.clone());
         let idx = self.add_constant(fun);
@@ -437,7 +437,7 @@ impl<'a> Compiler<'a> {
             if local.depth < self.chunk.scope_depth {
                 break;
             }
-            if *local.ident.item == ident.item {
+            if **local.ident.item == ident.item {
                 let kind = CompileErrorKind::ReassignmentOfVariableInLocalScope {
                     ident: ident.item.to_string(),
                 };
@@ -459,9 +459,7 @@ impl<'a> Compiler<'a> {
 
     fn compile_ident_constant(&mut self, ident: Spanned<&str>) -> Result<u8, StaticError<'a>> {
         let span = ident.span;
-        let ident = Value::new_object(Object::String(
-            STRING_INTERNER.lock().unwrap().intern(ident.item),
-        ));
+        let ident = Value::new_string(STRING_INTERNER.lock().unwrap().intern(ident.item));
         let idx = self.add_constant(ident);
         let Ok(idx) = u8::try_from(idx) else {
             let kind = CompileErrorKind::Msg("too many constants".into());
@@ -898,7 +896,7 @@ impl<'a> Compiler<'a> {
         #[allow(clippy::unit_arg)]
         match prefix.item {
             Token::Number { value, .. } => self
-                .compile_constant(Value::Number(value), prefix.span)
+                .compile_constant(Value::new_number(value), prefix.span)
                 .map(|_| ()),
             Token::LParen => self.compile_grouping(prefix, can_assign),
             Token::Minus | Token::Bang => self.compile_unary(prefix, can_assign),
@@ -907,9 +905,7 @@ impl<'a> Compiler<'a> {
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
             Token::String { value, .. } => self
                 .compile_constant(
-                    Value::new_object(Object::String(
-                        STRING_INTERNER.lock().unwrap().intern(value.to_string()),
-                    )),
+                    Value::new_string(STRING_INTERNER.lock().unwrap().intern(value.to_string())),
                     prefix.span,
                 )
                 .map(|_| ()),
@@ -1073,7 +1069,7 @@ impl<'a> Compiler<'a> {
         span: Span,
     ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
         for (i, local) in unit.locals.iter().enumerate().rev() {
-            if *local.ident.item == ident {
+            if **local.ident.item == ident {
                 assert!(i < u8::MAX as usize);
                 if !local.init {
                     let kind = CompileErrorKind::UseOfLocalInItsOwnInitializer;

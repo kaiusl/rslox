@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use rslox::vm::Vm;
+use rslox::vm::{Vm, STRING_INTERNER};
 
 use clap::Parser;
 
