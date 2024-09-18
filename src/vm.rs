@@ -3,27 +3,21 @@ use std::cell::{RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::rc::Rc;
-use std::sync::{LazyLock, Mutex};
 
 use fnv::FnvBuildHasher;
-use hashbrown::hash_map::{Entry, RawEntryMut, RawVacantEntryMut};
+use hashbrown::hash_map::RawEntryMut;
 use hashbrown::{HashMap, HashSet};
 
 use crate::bytecode::{BytesCursor, OpCode};
-use crate::common::Span;
-use crate::compiler;
 use crate::value::{
-    InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjInstance, ObjUpvalue,
-    Object, Value,
+    Gc, GcObj, InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction,
+    ObjInstance, ObjUpvalue, Object, StringInterner, Value, ValueInner,
 };
 
 pub(crate) type BuildHasher = FnvBuildHasher;
 
 #[cfg(feature = "debug_disassemble")]
 use crate::disassembler::Disassembler;
-
-pub static STRING_INTERNER: LazyLock<Mutex<StringInterner>> =
-    LazyLock::new(|| Mutex::new(StringInterner::new()));
 
 use self::error::{RuntimeError, RuntimeErrorKind};
 
@@ -39,7 +33,12 @@ pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub globals: HashMap<InternedString, Value, BuildHasher>,
     pub call_frames: arrayvec::ArrayVec<CallFrame, MAX_FRAMES>,
     pub frame: CallFrame,
-    pub open_upvalues: BTreeMap<usize, Rc<RefCell<ObjUpvalue>>>,
+    pub open_upvalues: BTreeMap<usize, GcObj<RefCell<ObjUpvalue>>>,
+    pub is_init: bool,
+    pub gc: Gc,
+    pub string_interner: StringInterner,
+
+    pub init_name: InternedString,
 
     output: OUT,
     outerr: OUTERR,
@@ -59,14 +58,25 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         #[cfg(feature = "debug_trace")]
         let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
 
+        let mut gc = Gc::new();
+        let mut string_interner = StringInterner::new();
+        let init_name = string_interner.intern("init", &mut gc);
         let mut vm = Vm {
-            frame: CallFrame::new(),
+            // SAFETY: this frame will never be actually used, self.compile must be called before vm can be used and that sets a new frame
+            frame: CallFrame::new(BytesCursor::new(Rc::new([])), unsafe { GcObj::dangling() }),
             stack: Stack::new(),
             globals: HashMap::default(),
             call_frames: arrayvec::ArrayVec::new(),
             open_upvalues: BTreeMap::new(),
+
+            gc,
+            string_interner,
+
+            init_name,
             output,
             outerr,
+
+            is_init: false,
 
             #[cfg(feature = "debug_trace")]
             disassembler,
@@ -84,7 +94,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     where
         for<'b> &'b mut OUTERR: io::Write,
     {
-        let compiler = crate::compiler::Compiler::from_str(input);
+        let compiler =
+            crate::compiler::Compiler::from_str(input, &mut self.gc, &mut self.string_interner);
         let (bytecode, constants) = match compiler.compile() {
             Ok(bytecode) => bytecode,
             Err(err) => {
@@ -105,11 +116,18 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             self.disassembler = Disassembler::new(bytecode.clone(), constants.clone());
         }
 
-        self.frame.constants = constants.into();
-        self.frame.spans = Rc::new(bytecode.spans);
-        self.frame.instructions = BytesCursor::new(bytecode.code.into());
-        self.push(Value::Nil).unwrap();
-        self.frame.slots = 0;
+        let name = self.string_interner.intern("", &mut self.gc);
+        let fun = ObjFunction::new(name, bytecode, constants.into(), 0, 0);
+        let instructions = fun.bytecode.clone();
+        let fun_value = Value::new_function(fun, &mut self.gc);
+        let fun = fun_value.try_into_function().unwrap();
+        let closure = ObjClosure::new(fun, Vec::new());
+        let closure_value = Value::new_closure(closure, &mut self.gc);
+        let closure = closure_value.try_to_closure().unwrap();
+        self.push(closure_value).unwrap();
+        self.frame = CallFrame::new(BytesCursor::new(instructions), closure);
+
+        self.is_init = true;
 
         Ok(())
     }
@@ -119,6 +137,15 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         for<'b> &'b mut OUT: io::Write,
         for<'b> &'b mut OUTERR: io::Write,
     {
+        if !self.is_init {
+            writeln!(
+                &mut self.outerr,
+                "no compiled code, try calling self.compile first"
+            )
+            .unwrap();
+            return;
+        }
+
         if let Err(err) = self.run_core() {
             let report = miette::Report::new(err).with_source_code(input.to_string());
             match writeln!(&mut self.outerr, "{report:?}") {
@@ -230,7 +257,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_constant(&mut self) -> Result<(), RuntimeError> {
-        let value = self.frame.expect_constant().clone();
+        let value = *self.frame.expect_constant();
         self.push(value)
     }
 
@@ -251,7 +278,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .from_key_hashed_nocheck(name.get_hash(), name);
         match entry {
             RawEntryMut::Vacant(entry) => {
-                entry.insert_hashed_nocheck(name.get_hash(), name.clone(), value);
+                entry.insert_hashed_nocheck(name.get_hash(), *name, value);
             }
             RawEntryMut::Occupied(mut entry) => {
                 entry.insert(value);
@@ -271,10 +298,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .raw_entry()
             .from_key_hashed_nocheck(name.get_hash(), name);
 
-        if let Some((_, value)) = raw_entry {
-            self.push(value.clone())
+        if let Some((_, &value)) = raw_entry {
+            self.push(value)
         } else {
-            let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
+            let kind = RuntimeErrorKind::UndefinedVariable {
+                name: name.to_string(),
+            };
             Err(self.runtime_error(kind, 2))
         }
     }
@@ -293,15 +322,16 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         match entry {
             RawEntryMut::Occupied(mut entry) => {
-                let value = self
+                let value = *self
                     .stack
                     .last()
-                    .expect("tried to set global with no value on the stack")
-                    .clone();
+                    .expect("tried to set global with no value on the stack");
                 entry.insert(value);
             }
             RawEntryMut::Vacant(_) => {
-                let kind = RuntimeErrorKind::UndefinedVariable { name: name.clone() };
+                let kind = RuntimeErrorKind::UndefinedVariable {
+                    name: name.to_string(),
+                };
                 return Err(self.runtime_error(kind, 2));
             }
         }
@@ -309,27 +339,25 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_get_local(&mut self) -> Result<(), RuntimeError> {
-        let value = self.expect_local().clone();
+        let value = *self.expect_local();
         self.push(value)
     }
 
     fn run_op_set_local(&mut self) {
-        *self.expect_local() = self
+        *self.expect_local() = *self
             .stack
             .last()
-            .expect("expected value on stack to set local variable")
-            .clone();
+            .expect("expected value on stack to set local variable");
     }
 
     fn run_on_get_upvalue(&mut self) -> Result<(), RuntimeError> {
         let upvalue = self.frame.expect_upvalue();
         let value = match &*upvalue {
-            ObjUpvalue::Open(stack_idx) => self
+            ObjUpvalue::Open(stack_idx) => *self
                 .stack
                 .get(*stack_idx)
-                .expect("tried to get upvalue at invalid stack index")
-                .clone(),
-            ObjUpvalue::Closed(value) => value.clone(),
+                .expect("tried to get upvalue at invalid stack index"),
+            ObjUpvalue::Closed(value) => *value,
         };
         drop(upvalue);
         self.push(value)
@@ -337,11 +365,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn run_op_set_upvalue(&mut self) {
         let mut upvalue = self.frame.expect_upvalue();
-        let value = self
+        let value = *self
             .stack
             .last()
-            .expect("tried to set upvalue without value on stack")
-            .clone();
+            .expect("tried to set upvalue without value on stack");
         match &mut *upvalue {
             ObjUpvalue::Open(stack_idx) => {
                 let stack_slot = self
@@ -381,8 +408,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
 
         match prop_value {
-            Some((_, value)) => {
-                let value = value.clone();
+            Some((_, &value)) => {
                 drop(instance);
                 self.stack.pop(); // instance
                 self.push(value)
@@ -396,7 +422,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
                 let Some((_, method)) = method else {
                     let kind = RuntimeErrorKind::UndefinedProperty {
-                        name: prop_name.clone(),
+                        name: prop_name.to_string(),
                     };
                     return Err(self.runtime_error(kind, 1));
                 };
@@ -404,9 +430,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 drop(class);
                 drop(instance);
 
+                #[cfg(feature = "debug_gc")]
+                println!("\nGC from op_get_property");
+                self.maybe_run_gc();
                 let receiver = self.stack.pop().expect("expected receiver on stack");
                 let method = ObjBoundMethod::new(receiver, method);
-                let method = Value::new_bound_method(method);
+                let method = Value::new_bound_method(method, &mut self.gc);
 
                 self.push(method)
             }
@@ -421,16 +450,15 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
-        let name = self
+        let name = *self
             .frame
             .expect_constant()
             .try_as_string()
             .expect("tried to set property name from non string");
-        let value = self
+        let value = *self
             .stack
             .last()
-            .expect("expected value on the stack to set property")
-            .clone();
+            .expect("expected value on the stack to set property");
 
         let mut instance = instance.borrow_mut();
         let properties = &mut instance.properties;
@@ -439,14 +467,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         // It's quite common operation to set the same property multiple times
         let property = properties
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
 
         match property {
             hashbrown::hash_map::RawEntryMut::Occupied(mut entry) => {
                 entry.insert(value);
             }
             hashbrown::hash_map::RawEntryMut::Vacant(entry) => {
-                entry.insert_hashed_nocheck(name.get_hash(), name.clone(), value);
+                entry.insert_hashed_nocheck(name.get_hash(), name, value);
             }
         }
 
@@ -459,8 +487,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to negate with no value on stack");
 
-        if let Value::Number(v) = value {
-            self.push(Value::Number(-v))
+        if let ValueInner::Number(v) = value.into_inner() {
+            self.push(Value::new_number(-v))
         } else {
             let kind = RuntimeErrorKind::InvalidOperand { expected: "number" };
             Err(self.runtime_error(kind, 1))
@@ -473,7 +501,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to not with no value on stack");
 
-        self.push(Value::Bool(value.is_falsey()))
+        self.push(Value::new_bool(value.is_falsey()))
     }
 
     fn run_op_eq(&mut self) -> Result<(), RuntimeError> {
@@ -486,7 +514,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to eq with no lhs value on stack");
 
-        self.push(Value::Bool(lhs == rhs))
+        self.push(Value::new_bool(lhs == rhs))
     }
 
     fn run_op_print(&mut self)
@@ -552,11 +580,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .instructions
             .try_u8()
             .expect("expected an u8 operand for op call");
-        let callee = self
+        let callee = *self
             .stack
             .get(self.stack.len() - arg_count as usize - 1)
-            .expect("expected callee on stack")
-            .clone();
+            .expect("expected callee on stack");
         self.call_value(callee, arg_count)?;
         Ok(())
     }
@@ -595,11 +622,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             let upvalue = if is_local == 1 {
                 self.capture_upvalue(self.frame.slots + index as usize)
             } else {
-                Rc::clone(
+                GcObj::clone(
                     self.frame
                         .closure
-                        .as_ref()
-                        .expect("expected to be inside closure to have upvalues")
                         .upvalues
                         .get(index as usize)
                         .expect("tried to get upvalue at invalid index"),
@@ -609,7 +634,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             upvalues.push(upvalue);
         }
 
-        let closure = Value::new_closure(ObjClosure::new(fun, upvalues));
+        #[cfg(feature = "debug_gc")]
+        println!("gc from op_closure");
+        self.maybe_run_gc();
+        let closure = Value::new_closure(ObjClosure::new(fun, upvalues), &mut self.gc);
         self.push(closure)
     }
 
@@ -624,8 +652,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect_constant()
             .try_to_string()
             .expect("tried to get class name from non string");
-
-        let class = Value::new_class(ObjClass::new(name));
+        #[cfg(feature = "debug_gc")]
+        println!("gc from op_class");
+        self.maybe_run_gc();
+        let class = Value::new_class(ObjClass::new(name), &mut self.gc);
         self.push(class)
     }
 
@@ -675,6 +705,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
         let name = self
             .frame
+            .closure
+            .fun
             .constants
             .get(idx as usize)
             .expect("tried to get constant at invalid index")
@@ -686,9 +718,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .try_u8()
             .expect("expected a second u8 operand for op invoke");
 
-        // TODO: remove this technically unnecessary clone, but borrow checker complains atm, because we are borrowing from self
-        let name = name.clone();
-        self.invoke(&name, arg_count)?;
+        self.invoke(*name, arg_count)?;
         Ok(())
     }
 
@@ -710,13 +740,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             return Err(self.runtime_error(kind, 1));
         };
 
-        class.borrow_mut().methods.extend(
-            super_class
-                .borrow()
-                .methods
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
+        class
+            .borrow_mut()
+            .methods
+            .extend(super_class.borrow().methods.iter().map(|(k, v)| (*k, *v)));
 
         Ok(())
     }
@@ -724,12 +751,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn run_op_get_super(&mut self) -> Result<(), RuntimeError> {
         // Stack: bottom, .., superclass
 
-        let method_name = self
+        let method_name = *self
             .frame
             .expect_constant()
             .try_as_string()
-            .expect("tried to get method name from non string")
-            .clone();
+            .expect("tried to get method name from non string");
         let superclass = self
             .stack
             .pop()
@@ -742,7 +768,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         Ok(())
     }
 
-    fn invoke(&mut self, name: &InternedString, arg_count: u8) -> Result<(), RuntimeError> {
+    fn invoke(&mut self, name: InternedString, arg_count: u8) -> Result<(), RuntimeError> {
         let Some(instance) =
             self.stack[self.stack.len() - arg_count as usize - 1].try_as_instance()
         else {
@@ -755,13 +781,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let field = instance
             .properties
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
 
-        if let Some((_, field)) = field {
+        if let Some((_, &field)) = field {
             let idx = self.stack.len() - arg_count as usize - 1;
-            let field = field.clone();
             drop(instance);
-            self.stack[idx] = field.clone();
+            self.stack[idx] = field;
             return self.call_value(field, arg_count);
         }
 
@@ -769,10 +794,12 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let method = class
             .methods
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
 
         let Some((_, method)) = method else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+            let kind = RuntimeErrorKind::UndefinedProperty {
+                name: name.to_string(),
+            };
             return Err(self.runtime_error(kind, 1));
         };
 
@@ -782,26 +809,28 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         self.call_closure(method, arg_count)
     }
 
-    fn invoke_from_class(
-        &mut self,
-        class: &ObjClass,
-        name: &InternedString,
-        arg_count: u8,
-    ) -> Result<(), RuntimeError> {
-        let method = class
-            .methods
-            .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+    // fn invoke_from_class(
+    //     &mut self,
+    //     class: &ObjClass,
+    //     name: &InternedString,
+    //     arg_count: u8,
+    // ) -> Result<(), RuntimeError> {
+    //     let method = class
+    //         .methods
+    //         .raw_entry()
+    //         .from_key_hashed_nocheck(name.get_hash(), name);
 
-        let Some((_, method)) = method else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
-            return Err(self.runtime_error(kind, 1));
-        };
+    //     let Some((_, method)) = method else {
+    //         let kind = RuntimeErrorKind::UndefinedProperty {
+    //             name: name.to_string(),
+    //         };
+    //         return Err(self.runtime_error(kind, 1));
+    //     };
 
-        let method = method.try_to_closure().unwrap();
+    //     let method = method.try_to_closure().unwrap();
 
-        self.call_closure(method, arg_count)
-    }
+    //     self.call_closure(method, arg_count)
+    // }
 
     fn bind_method(&mut self, class: &ObjClass, name: &InternedString) -> Result<(), RuntimeError> {
         let method = class
@@ -810,74 +839,27 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .from_key_hashed_nocheck(name.get_hash(), name);
 
         let Some((_, method)) = method else {
-            let kind = RuntimeErrorKind::UndefinedProperty { name: name.clone() };
+            let kind = RuntimeErrorKind::UndefinedProperty {
+                name: name.to_string(),
+            };
             return Err(self.runtime_error(kind, 1));
         };
         let method = method.try_to_closure().unwrap();
 
+        #[cfg(feature = "debug_gc")]
+        println!("gc from bind_method");
+        self.maybe_run_gc();
         let receiver = self.stack.pop().expect("expected receiver on stack");
         let method = ObjBoundMethod::new(receiver, method);
-        let method = Value::new_bound_method(method);
-
+        let method = Value::new_bound_method(method, &mut self.gc);
         self.push(method)
     }
 
     fn close_upvalues(&mut self, idx: usize) {
         while let Some(last) = self.open_upvalues.last_entry() {
             if *last.key() >= idx {
-                // Make sure not to create a Rc cycle
-                let mut value = self.stack[*last.key()].clone();
-
-                match &value {
-                    Value::Object(Object::Class(cls)) => {
-                        // One way to create cycle is if upvalue is a class and it's methods hold these upvalues
-                        // Since we are closing the upvalue of class, then the class must be leaving the stack.
-                        // This means that the closure should become the owner of the class and the class should not have a strong reference to that closure.
-                        // Essentially the user program doesn't have a reference to the class anymore, only to the closure.
-                        //
-                        // Note that we cannot make all closure references from class weak because if the closure calls other closures, the class must still own them,
-                        // or they will be removed.
-                        //
-                        // In summary, we must make all references from the class to the closure weak, where the closure has an upvalue to the class.
-                        let mut class = cls.borrow_mut();
-
-                        for m in class.methods.values_mut() {
-                            let method = m.try_as_closure().unwrap();
-                            let mut has_self_ref = false;
-                            for u in method.upvalues.iter() {
-                                let u = u.borrow();
-                                if let ObjUpvalue::Open(idx_) = &*u {
-                                    if *idx_ == idx {
-                                        has_self_ref = true;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if has_self_ref {
-                                *m = m.to_weak();
-                            }
-                        }
-                    }
-                    Value::Object(Object::Closure(closure)) => {
-                        // A self referential closure will have an upvalue that points to itself, that upvalue needs to be a weak reference
-                        let mut has_self_ref = false;
-                        for u in closure.upvalues.iter() {
-                            let u = u.borrow();
-                            if let ObjUpvalue::Open(idx_) = &*u {
-                                if *idx_ == idx {
-                                    has_self_ref = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if has_self_ref {
-                            value = value.to_weak();
-                        }
-                    }
-                    _ => {}
-                }
+                // // Make sure not to create a Rc cycle
+                let value = self.stack[*last.key()];
 
                 *last.get().borrow_mut() = ObjUpvalue::Closed(value);
                 last.remove();
@@ -887,27 +869,30 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
     }
 
-    fn capture_upvalue(&mut self, index: usize) -> Rc<RefCell<ObjUpvalue>> {
+    fn capture_upvalue(&mut self, index: usize) -> GcObj<RefCell<ObjUpvalue>> {
         for (stack_idx, upvalue) in self.open_upvalues.iter().rev() {
             if *stack_idx == index {
-                return Rc::clone(upvalue);
+                return GcObj::clone(upvalue);
             }
 
             if *stack_idx < index {
                 break;
             }
         }
+        #[cfg(feature = "debug_gc")]
+        println!("gc from capture upvalue");
+        self.maybe_run_gc();
+        let upvalue = self.gc.new_object_inner(RefCell::new(ObjUpvalue::Open(index)));
+        self.open_upvalues.insert(index, GcObj::clone(&upvalue));
 
-        let upvalue = Rc::new(RefCell::new(ObjUpvalue::Open(index)));
-        self.open_upvalues.insert(index, Rc::clone(&upvalue));
         upvalue
     }
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
-        match callee {
-            Value::Object(Object::Closure(fun)) => self.call_closure(fun, arg_count),
+        match callee.into_inner() {
+            ValueInner::Object(Object::Closure(fun)) => self.call_closure(fun, arg_count),
             //Value::Object(Object::Function(fun)) => self.call_function(&fun, arg_count),
-            Value::Object(Object::NativeFn(fun)) => {
+            ValueInner::Object(Object::NativeFn(fun)) => {
                 let result = fun(
                     arg_count,
                     &self.stack[self.stack.len() - arg_count as usize..],
@@ -916,18 +901,20 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .truncate(self.stack.len() - arg_count as usize - 1);
                 self.push(result)
             }
-            Value::Object(Object::Class(cls)) => {
-                let instance = ObjInstance::new(Rc::clone(&cls));
-
-                let instance = Value::new_object(Object::Instance(Rc::new(RefCell::new(instance))));
+            ValueInner::Object(Object::Class(cls)) => {
+                #[cfg(feature = "debug_gc")]
+                println!("gc from call value");
+                self.maybe_run_gc();
+                let instance = ObjInstance::new(GcObj::clone(&cls));
+                let instance = Value::new_instance(instance, &mut self.gc);
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = instance;
                 let class = cls.borrow();
 
-                let initializer = class.methods.raw_entry().from_key_hashed_nocheck(
-                    compiler::INIT_METHOD_NAME.get_hash(),
-                    &*compiler::INIT_METHOD_NAME,
-                );
+                let initializer = class
+                    .methods
+                    .raw_entry()
+                    .from_key_hashed_nocheck(self.init_name.get_hash(), &self.init_name);
 
                 if let Some((_, initializer)) = initializer {
                     let initializer = initializer.try_to_closure().unwrap();
@@ -944,10 +931,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 // self.push(instance);
                 Ok(())
             }
-            Value::Object(Object::BoundMethod(method)) => {
+            ValueInner::Object(Object::BoundMethod(method)) => {
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
-                self.stack[receiver_slot] = method.receiver.clone();
-                self.call_closure(Rc::clone(&method.method), arg_count)
+                self.stack[receiver_slot] = method.receiver;
+                self.call_closure(GcObj::clone(&method.method), arg_count)
             }
 
             _ => {
@@ -958,9 +945,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn define_native(&mut self, name: impl Into<String> + AsRef<str>, fun: NativeFn) {
-        let name = STRING_INTERNER.lock().unwrap().intern(name);
-        let fun = Object::NativeFn(Rc::new(fun));
-        let fun = Value::new_object(fun);
+        let name = self.string_interner.intern(name, &mut self.gc);
+        let fun = Value::new_native_fn(fun, &mut self.gc);
         self.globals.insert(name, fun);
     }
 
@@ -970,10 +956,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .expect("expected current time to be after unix epoch")
             .as_secs_f64();
 
-        Value::Number(time)
+        Value::new_number(time)
     }
 
-    fn call_closure(&mut self, closure: Rc<ObjClosure>, arg_count: u8) -> Result<(), RuntimeError> {
+    fn call_closure(
+        &mut self,
+        closure: GcObj<ObjClosure>,
+        arg_count: u8,
+    ) -> Result<(), RuntimeError> {
         let fun = &*closure.fun;
 
         if arg_count as usize != fun.arity {
@@ -992,9 +982,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             // TODO: avoid cloning instructions
             instructions: BytesCursor::new(fun.bytecode.clone()),
             slots: self.stack.len() - arg_count as usize - 1,
-            spans: Rc::clone(&fun.spans),
-            constants: Rc::clone(&fun.constants),
-            closure: Some(closure),
+            closure,
         };
         let prev_frame = std::mem::replace(&mut self.frame, frame);
         self.call_frames.push(prev_frame);
@@ -1030,17 +1018,23 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn run_binary_add(&mut self) -> Result<(), RuntimeError> {
         let op = Self::add_number;
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
+        let rhs = self.stack.pop().map(Value::into_inner);
+        let lhs = self.stack.pop().map(Value::into_inner);
         match (lhs, rhs) {
-            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.push(Value::Number(op(lhs, rhs)))
+            (Some(ValueInner::Number(lhs)), Some(ValueInner::Number(rhs))) => {
+                let result = op(lhs, rhs);
+                self.push(Value::new_number(result))
             }
-            (Some(Value::Object(lhs)), Some(Value::Object(rhs))) => match (lhs, rhs) {
+            (Some(ValueInner::Object(lhs)), Some(ValueInner::Object(rhs))) => match (lhs, rhs) {
                 (Object::String(lhs), Object::String(rhs)) => {
                     let new = lhs.to_string() + &rhs;
-                    let new = STRING_INTERNER.lock().unwrap().intern(new);
-                    self.push(Value::new_object(Object::String(new)))
+
+                    #[cfg(feature = "debug_gc")]
+                    println!("gc from run_binary_add");
+                    self.maybe_run_gc();
+                    let new = self.string_interner.intern(new, &mut self.gc);
+                    let value = Value::new_string(new);
+                    self.push(value)
                 }
                 _ => {
                     let kind = RuntimeErrorKind::InvalidOperands {
@@ -1049,7 +1043,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     Err(self.runtime_error(kind, 1))
                 }
             },
-            (Some(lhs), Some(rhs)) => {
+            (Some(_), Some(_)) => {
                 let kind = RuntimeErrorKind::InvalidOperands {
                     expected: "two numbers or string",
                 };
@@ -1063,36 +1057,30 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     #[inline]
     fn binary_arithmetic_op(&mut self, op: impl Fn(f64, f64) -> f64) -> Result<(), RuntimeError> {
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
-        match (lhs, rhs) {
-            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.push(Value::Number(op(lhs, rhs)))
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        match (lhs.into_inner(), rhs.into_inner()) {
+            (ValueInner::Number(lhs), ValueInner::Number(rhs)) => {
+                self.push(Value::new_number(op(lhs, rhs)))
             }
-            (Some(lhs), Some(rhs)) => {
+            (_, _) => {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 Err(self.runtime_error(kind, 1))
-            }
-            _ => {
-                panic!("tried to do arithmetic binary op with not enough values on stack")
             }
         }
     }
 
     #[inline]
     fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError> {
-        let rhs = self.stack.pop();
-        let lhs = self.stack.pop();
-        match (lhs, rhs) {
-            (Some(Value::Number(lhs)), Some(Value::Number(rhs))) => {
-                self.push(Value::Bool(op(lhs, rhs)))
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        match (lhs.into_inner(), rhs.into_inner()) {
+            (ValueInner::Number(lhs), ValueInner::Number(rhs)) => {
+                self.push(Value::new_bool(op(lhs, rhs)))
             }
-            (Some(lhs), Some(rhs)) => {
+            (_, _) => {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 Err(self.runtime_error(kind, 1))
-            }
-            _ => {
-                panic!("tried to do cmp binary op with not enough values on stack")
             }
         }
     }
@@ -1130,6 +1118,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn runtime_error(&self, kind: RuntimeErrorKind, offset: usize) -> RuntimeError {
         let span = self
             .frame
+            .closure
+            .fun
             .spans
             .get(&(self.frame.instructions.offset() - offset))
             .cloned()
@@ -1148,25 +1138,88 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .get_mut(self.frame.slots + idx as usize)
             .expect("tried to get local at invalid index")
     }
+
+    pub fn print_stack(&self) {
+        for (i, val) in self.stack.iter().enumerate() {
+            println!("{}: {}", i, val);
+        }
+    }
+
+    pub fn print_globals(&self) {
+        for (k, val) in self.globals.iter() {
+            println!("{}: {}", k, val);
+        }
+    }
+
+    pub fn run_gc(&mut self) {
+        self.gc_mark_roots();
+        // SAFETY: we just marked all of the roots
+        unsafe { self.gc.collect() };
+    }
+
+    #[cfg(not(feature = "debug_gc_stress"))]
+    pub fn maybe_run_gc(&mut self) {
+        if self.gc.should_collect() {
+            self.run_gc();
+        }
+    }
+
+    #[cfg(feature = "debug_gc_stress")]
+    pub fn maybe_run_gc(&mut self) {
+        self.run_gc();
+    }
+
+    fn gc_mark_roots(&mut self) {
+        #[cfg(feature = "debug_gc")]
+        {
+            println!("gc: marking roots");
+        }
+
+        self.gc.mark_obj(Object::String(self.init_name));
+
+        for it in self.stack.iter() {
+            self.gc.mark_value(it);
+        }
+
+        for (k, v) in self.globals.iter() {
+            let k = Object::String(*k);
+            self.gc.mark_obj(k);
+            self.gc.mark_value(v);
+        }
+
+        self.gc.mark_call_frame(&self.frame);
+
+        for it in self.call_frames.iter() {
+            self.gc.mark_call_frame(it);
+        }
+
+        for it in self.open_upvalues.values() {
+            let obj = Object::Upvalue(*it);
+            self.gc.mark_obj(obj);
+        }
+
+        //STRING_INTERNER.lock().unwrap().gc_mark();
+
+        #[cfg(feature = "debug_gc")]
+        {
+            println!("gc: marking roots -- done");
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct CallFrame {
     pub instructions: BytesCursor,
     pub slots: usize,
-    pub spans: Rc<HashMap<usize, Span, BuildHasher>>,
-    pub constants: Rc<[Value]>,
-    pub closure: Option<Rc<ObjClosure>>,
+    pub closure: GcObj<ObjClosure>,
 }
 
 impl CallFrame {
-    pub fn new() -> Self {
+    pub fn new(instructions: BytesCursor, closure: GcObj<ObjClosure>) -> Self {
         Self {
-            instructions: BytesCursor::new(Vec::new().into()),
+            instructions,
             slots: 0,
-            spans: Rc::new(HashMap::default()),
-            constants: Rc::new([]),
-            closure: None,
+            closure,
         }
     }
 
@@ -1176,7 +1229,9 @@ impl CallFrame {
             .instructions
             .try_u8()
             .expect("tried to read constant with no more instructions");
-        self.constants
+        self.closure
+            .fun
+            .constants
             .get(idx as usize)
             .expect("tried to get constant at invalid index")
     }
@@ -1187,40 +1242,10 @@ impl CallFrame {
             .try_u8()
             .expect("expected an u8 operand for op get upvalue");
 
-        let closure = self
-            .closure
-            .as_ref()
-            .expect("tried to get upvalue without closure");
-
-        closure
+        self.closure
             .upvalues
             .get(upvalue_index as usize)
             .expect("tried to get upvalue at invalid index")
             .borrow_mut()
-    }
-}
-
-#[derive(Debug)]
-pub struct StringInterner {
-    strings: HashSet<InternedString, BuildHasher>,
-}
-
-impl StringInterner {
-    pub fn new() -> Self {
-        Self {
-            strings: HashSet::default(),
-        }
-    }
-
-    pub fn intern(&mut self, s: impl Into<String> + AsRef<str>) -> InternedString {
-        let s_ref = s.as_ref();
-        match self.strings.get(s_ref) {
-            Some(existing) => existing.clone(),
-            None => {
-                let new = InternedString::new(s.into());
-                self.strings.insert(new.clone());
-                new
-            }
-        }
     }
 }

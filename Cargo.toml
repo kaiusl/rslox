@@ -21,6 +21,7 @@ rstest = "0.22.0"
 [lints.rust]
 rust_2018_idioms = "deny"
 unused_must_use = "deny"
+unsafe_op_in_unsafe_fn = "deny"
 
 [lints.clippy]
 new_without_default = "allow"
@@ -28,6 +29,8 @@ new_without_default = "allow"
 [features]
 debug_trace = []
 debug_disassemble = []
+debug_gc = []
+debug_gc_stress = []
 default = []
 
 [profile.release]

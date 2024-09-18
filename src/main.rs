@@ -1,6 +1,10 @@
 use std::io::Write;
 use std::path::PathBuf;
 
+#[cfg(feature = "debug_disassemble")]
+use rslox::compiler::Compiler;
+#[cfg(feature = "debug_disassemble")]
+use rslox::disassembler::Disassembler;
 use rslox::vm::Vm;
 
 use clap::Parser;
@@ -38,12 +42,30 @@ fn main() {
                 //let input = std::str::from_utf8(&buffer).unwrap();
                 let input = buffer.trim_end_matches('\n');
                 println!("input: {}", input);
-                if input == "@exit" {
-                    break;
+                match input {
+                    "@exit" => break,
+                    "@stack" => {
+                        vm.print_stack();
+                        buffer.clear();
+                        continue;
+                    }
+                    "@globals" => {
+                        vm.print_globals();
+                        buffer.clear();
+                        continue;
+                    }
+                    "@gc" => {
+                        vm.run_gc();
+                        buffer.clear();
+                        continue;
+                    }
+
+                    _ => {}
                 }
                 match vm.compile(input) {
                     Ok(_) => {}
                     Err(_) => {
+                        buffer.clear();
                         continue;
                     }
                 }

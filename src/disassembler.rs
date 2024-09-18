@@ -1,15 +1,16 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::rc::Rc;
+
+use hashbrown::HashMap;
 
 use crate::bytecode::{BytesCursor, Instruction};
 use crate::common::Span;
-use crate::value::Value;
+use crate::value::ValueInner;
 use crate::vm::BuildHasher;
 
 #[derive(Debug, Clone)]
 pub struct Disassembler {
-    pub constants: Rc<[Value]>,
+    pub constants: Rc<[ValueInner]>,
     pub spans: Rc<HashMap<usize, Span, BuildHasher>>,
     pub cursor: BytesCursor,
     pub prev_line: Option<usize>,
@@ -19,7 +20,7 @@ impl Disassembler {
     pub fn new(
         code: Rc<[u8]>,
         spans: Rc<HashMap<usize, Span, BuildHasher>>,
-        constants: Rc<[Value]>,
+        constants: Rc<[ValueInner]>,
     ) -> Disassembler {
         Disassembler {
             constants,

@@ -4,8 +4,8 @@ use std::sync::LazyLock;
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
-use crate::value::{InternedString, ObjFunction, Object, Value};
-use crate::vm::STRING_INTERNER;
+use crate::value::{Gc, GcObj, InternedString, ObjFunction, Object, ValueInner};
+use crate::value::{StringInterner, Value};
 
 use num_traits::FromPrimitive;
 
@@ -22,13 +22,15 @@ pub enum FunType {
     Initializer,
 }
 
-pub struct Compiler<'a> {
-    pub source: &'a str,
-    pub lexer: PeekableLexer<'a>,
-    pub errors: StaticErrors<'a>,
+pub struct Compiler<'src, 'vm> {
+    pub source: &'src str,
+    pub lexer: PeekableLexer<'src>,
+    pub errors: StaticErrors<'src>,
 
     pub chunk: CompileUnit,
     pub current_class: Option<ClassCompileUnit>,
+    pub gc: &'vm mut Gc,
+    pub string_interner: &'vm mut StringInterner,
 }
 
 pub struct ClassCompileUnit {
@@ -85,20 +87,15 @@ impl CompileUnit {
     }
 }
 
-pub static INIT_METHOD_NAME: LazyLock<InternedString> =
-    LazyLock::new(|| InternedString::new("init".into()));
-
-impl<'a> Compiler<'a> {
+impl<'src, 'vm> Compiler<'src, 'vm> {
     #[allow(clippy::should_implement_trait)]
-    pub fn from_str(source: &'a str) -> Self {
-        //let mut locals = Vec::with_capacity(1);
-        // I don't think we need it atm, we'll add it later if we do need it
-        // locals[0] is for VM's internal use
-        // locals.push(Local {
-        //     ident: Spanned::new(String::from("this"), Span::from_len(0, 0, 0)),
-        //     depth: 0,
-        //     init: true,
-        // });
+    pub fn from_str(
+        source: &'src str,
+        gc: &'vm mut Gc,
+        string_interner: &'vm mut StringInterner,
+    ) -> Self {
+
+        let this = string_interner.intern("this", gc);
 
         Self {
             source,
@@ -106,13 +103,12 @@ impl<'a> Compiler<'a> {
             errors: StaticErrors::new(source),
             chunk: CompileUnit::new(
                 FunType::Script,
-                Spanned::new(
-                    STRING_INTERNER.lock().unwrap().intern("this"),
-                    Span::from_len(0, 0, 0),
-                ),
+                Spanned::new(this, Span::from_len(0, 0, 0)),
                 None,
             ),
             current_class: None,
+            gc,
+            string_interner,
         }
     }
 
@@ -125,7 +121,7 @@ impl<'a> Compiler<'a> {
         self.chunk.constants.len() - 1
     }
 
-    pub fn compile(mut self) -> Result<(ByteCode, Vec<Value>), StaticErrors<'a>> {
+    pub fn compile(mut self) -> Result<(ByteCode, Vec<Value>), StaticErrors<'src>> {
         loop {
             match self.lexer.peek() {
                 Ok(Some(tok)) if **tok == Token::Eof => break,
@@ -158,7 +154,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_declaration(&mut self) -> Result<(), StaticError<'a>> {
+    fn compile_declaration(&mut self) -> Result<(), StaticError<'src>> {
         let result = match self.lexer.next_if(|tok| {
             matches!(
                 tok,
@@ -181,7 +177,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_class_decl(&mut self, _class_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_class_decl(
+        &mut self,
+        _class_kw: Spanned<Token<'src>>,
+    ) -> Result<(), StaticError<'src>> {
         let class_ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let class_ident = class_ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = class_ident.span.clone();
@@ -207,12 +206,11 @@ impl<'a> Compiler<'a> {
             }
             self.current_class.as_mut().unwrap().has_superclass = true;
 
+            let super_string = self.string_interner.intern("super", &mut self.gc);
+            self.add_constant(Value::new_string(super_string));
             self.enter_scope();
             let local = Local {
-                ident: Spanned::new(
-                    STRING_INTERNER.lock().unwrap().intern("super"),
-                    Span::new(0, 0, 0),
-                ),
+                ident: Spanned::new(super_string, Span::new(0, 0, 0)),
                 depth: self.chunk.scope_depth,
                 init: false,
                 is_captured: false,
@@ -253,13 +251,15 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_method(&mut self) -> Result<(), StaticError<'a>> {
+    fn compile_method(&mut self) -> Result<(), StaticError<'src>> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let span = ident.span.clone();
         let const_idx = self.compile_ident_constant(ident.clone())?;
 
-        let fun_type = if ident.item == **INIT_METHOD_NAME {
+        let name = self.string_interner.intern("init", &mut self.gc);
+        self.add_constant(Value::new_string(name));
+        let fun_type = if ident.item == *name {
             FunType::Initializer
         } else {
             FunType::Method
@@ -271,7 +271,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_fun_decl(&mut self, fun_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_fun_decl(&mut self, fun_kw: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         let (ident, idx, ident_span) = self.compile_variable_name()?;
         if let Some(last) = self.chunk.locals.last_mut() {
             last.init = true;
@@ -288,15 +288,18 @@ impl<'a> Compiler<'a> {
 
     fn compile_function(
         &mut self,
-        fun_kw: Option<Spanned<Token<'a>>>,
+        fun_kw: Option<Spanned<Token<'src>>>,
         name: Spanned<&str>,
         fun_type: FunType,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let unit_name = if matches!(fun_type, FunType::Method | FunType::Initializer) {
-            STRING_INTERNER.lock().unwrap().intern("this")
+            self.string_interner.intern("this", &mut self.gc)
         } else {
-            STRING_INTERNER.lock().unwrap().intern("")
+            self.string_interner.intern("", &mut self.gc)
         };
+
+        // So that Gc doesn't delete "this" or ""
+        self.add_constant(Value::new_string(unit_name));
 
         let prev_chunk = std::mem::replace(
             &mut self.chunk,
@@ -352,13 +355,13 @@ impl<'a> Compiler<'a> {
         let function_bytecode = std::mem::replace(&mut self.chunk, parent);
 
         let fun = ObjFunction::new(
-            STRING_INTERNER.lock().unwrap().intern(name.item),
+            self.string_interner.intern(name.item, &mut self.gc),
             function_bytecode.bytecode,
             function_bytecode.constants.into(),
             arity,
             function_bytecode.upvalues.len(),
         );
-        let fun = Value::Object(Object::Function(Rc::new(fun)));
+        let fun = Value::new_function(fun, &mut self.gc);
 
         let span = fun_kw.map(|s| s.span).unwrap_or_else(|| name.span.clone());
         let idx = self.add_constant(fun);
@@ -378,7 +381,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_var_decl(&mut self, var_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_var_decl(&mut self, var_kw: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         let (_, const_idx, ident_span) = self.compile_variable_name()?;
 
         if let Some(_eq) = self.lexer.next_if(Token::is_eq)? {
@@ -394,7 +397,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_variable_name(&mut self) -> Result<(&'a str, u8, Span), StaticError<'a>> {
+    fn compile_variable_name(&mut self) -> Result<(&'src str, u8, Span), StaticError<'src>> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
 
         let ident_str = ident.map(|ident| ident.clone().try_into_ident().unwrap());
@@ -422,7 +425,7 @@ impl<'a> Compiler<'a> {
         self.emit(Instruction::DefineGlobal(idx.item), idx.span);
     }
 
-    fn declare_variable(&mut self, ident: Spanned<&str>) -> Result<(), StaticError<'a>> {
+    fn declare_variable(&mut self, ident: Spanned<&str>) -> Result<(), StaticError<'src>> {
         if self.chunk.scope_depth == 0 {
             return Ok(());
         }
@@ -446,8 +449,10 @@ impl<'a> Compiler<'a> {
             }
         }
 
+        let ident_inner = self.string_interner.intern(ident.item, &mut self.gc);
+        let ident = ident.map_into(|_| ident_inner);
         let local = Local {
-            ident: ident.map_into(|s| STRING_INTERNER.lock().unwrap().intern(s)),
+            ident,
             depth: self.chunk.scope_depth,
             init: false,
             is_captured: false,
@@ -457,11 +462,10 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_ident_constant(&mut self, ident: Spanned<&str>) -> Result<u8, StaticError<'a>> {
+    fn compile_ident_constant(&mut self, ident: Spanned<&str>) -> Result<u8, StaticError<'src>> {
         let span = ident.span;
-        let ident = Value::new_object(Object::String(
-            STRING_INTERNER.lock().unwrap().intern(ident.item),
-        ));
+        let ident = self.string_interner.intern(ident.item, &mut self.gc);
+        let ident = Value::new_string(ident);
         let idx = self.add_constant(ident);
         let Ok(idx) = u8::try_from(idx) else {
             let kind = CompileErrorKind::Msg("too many constants".into());
@@ -506,7 +510,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_stmt(&mut self) -> Result<(), StaticError<'a>> {
+    fn compile_stmt(&mut self) -> Result<(), StaticError<'src>> {
         let Some(tok) = self.lexer.next_if(|tok| {
             matches!(
                 tok,
@@ -532,8 +536,8 @@ impl<'a> Compiler<'a> {
 
     fn compile_return_stmt(
         &mut self,
-        return_kw: Spanned<Token<'a>>,
-    ) -> Result<(), StaticError<'a>> {
+        return_kw: Spanned<Token<'src>>,
+    ) -> Result<(), StaticError<'src>> {
         if self.chunk.fun_type == FunType::Script {
             let kind = CompileErrorKind::Msg("can't return from top-level code".into());
             let err = CompileError::new(kind, return_kw.span);
@@ -562,7 +566,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_for_stmt(&mut self, for_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_for_stmt(&mut self, for_kw: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         self.enter_scope();
         let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         match self.lexer.peek()? {
@@ -621,7 +625,10 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_while_stmt(&mut self, while_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_while_stmt(
+        &mut self,
+        while_kw: Spanned<Token<'src>>,
+    ) -> Result<(), StaticError<'src>> {
         let loop_start = self.chunk.bytecode.code.len();
         let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
@@ -638,7 +645,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn emit_loop(&mut self, loop_start: usize, span: Span) -> Result<(), StaticError<'a>> {
+    fn emit_loop(&mut self, loop_start: usize, span: Span) -> Result<(), StaticError<'src>> {
         let offset = self.chunk.bytecode.code.len() - loop_start + 3;
         if offset >= u16::MAX as usize {
             let kind = CompileErrorKind::Msg("Loop body too large".into());
@@ -651,7 +658,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_if_stmt(&mut self, if_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_if_stmt(&mut self, if_kw: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         let _lparen = self.consume(Token::is_lparen, || &[TokenKind::LParen])?;
         self.compile_expr()?;
         let _rparen = self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
@@ -696,14 +703,17 @@ impl<'a> Compiler<'a> {
         dst.copy_from_slice(&(jump as u16).to_le_bytes());
     }
 
-    fn compile_block_stmt(&mut self, _lbrace: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_block_stmt(
+        &mut self,
+        _lbrace: Spanned<Token<'src>>,
+    ) -> Result<(), StaticError<'src>> {
         self.enter_scope();
         self.compile_block()?;
         self.exit_scope();
         Ok(())
     }
 
-    fn compile_block(&mut self) -> Result<(), StaticError<'a>> {
+    fn compile_block(&mut self) -> Result<(), StaticError<'src>> {
         while self
             .lexer
             .is_next(|tok| !matches!(tok, Token::RBrace | Token::Eof))?
@@ -732,14 +742,14 @@ impl<'a> Compiler<'a> {
         self.chunk.scope_depth -= 1;
     }
 
-    fn compile_expr_stmt(&mut self) -> Result<(), StaticError<'a>> {
+    fn compile_expr_stmt(&mut self) -> Result<(), StaticError<'src>> {
         self.compile_expr()?;
         let semicolon = self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
         self.emit(Instruction::Pop, semicolon.span);
         Ok(())
     }
 
-    fn compile_print_stmt(&mut self, print: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_print_stmt(&mut self, print: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         self.compile_expr()?;
         self.consume(Token::is_semicolon, || &[TokenKind::Semicolon])?;
 
@@ -753,9 +763,9 @@ impl<'a> Compiler<'a> {
 
     pub fn consume(
         &mut self,
-        predicate: impl Fn(&Token<'a>) -> bool,
+        predicate: impl Fn(&Token<'src>) -> bool,
         expected_tokens: impl Fn() -> &'static [TokenKind],
-    ) -> Result<Spanned<Token<'a>>, StaticError<'a>> {
+    ) -> Result<Spanned<Token<'src>>, StaticError<'src>> {
         match self.lexer.next()? {
             Some(token) if predicate(&token) => Ok(token),
 
@@ -786,11 +796,11 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile_expr(&mut self) -> Result<(), StaticError<'a>> {
+    pub fn compile_expr(&mut self) -> Result<(), StaticError<'src>> {
         self.compile_precedence(Precedence::Assignment)
     }
 
-    fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'a>> {
+    fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'src>> {
         let idx = self.add_constant(value);
         let Ok(idx) = u8::try_from(idx) else {
             let kind = CompileErrorKind::Msg("too many constants".into());
@@ -805,9 +815,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_grouping(
         &mut self,
-        _lparen: Spanned<Token<'a>>,
+        _lparen: Spanned<Token<'src>>,
         _can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         self.compile_expr()?;
 
         self.consume(Token::is_rparen, || &[TokenKind::RParen])?;
@@ -817,9 +827,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_unary(
         &mut self,
-        operator: Spanned<Token<'a>>,
+        operator: Spanned<Token<'src>>,
         _can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         self.compile_precedence(Precedence::Unary)?; // operand
 
         match operator.item {
@@ -833,9 +843,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_binary(
         &mut self,
-        operator: Spanned<Token<'a>>,
+        operator: Spanned<Token<'src>>,
         _can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let precedence = Precedence::from_token(&operator);
 
         self.compile_precedence(precedence.next().unwrap())?;
@@ -866,7 +876,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_precedence(&mut self, precedence: Precedence) -> Result<(), StaticError<'a>> {
+    fn compile_precedence(&mut self, precedence: Precedence) -> Result<(), StaticError<'src>> {
         let token = self.consume(Self::has_prefix_rule, Self::prefix_tokens)?;
 
         let can_assign = precedence <= Precedence::Assignment;
@@ -892,27 +902,25 @@ impl<'a> Compiler<'a> {
 
     fn compile_prefix(
         &mut self,
-        prefix: Spanned<Token<'a>>,
+        prefix: Spanned<Token<'src>>,
         can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         #[allow(clippy::unit_arg)]
         match prefix.item {
             Token::Number { value, .. } => self
-                .compile_constant(Value::Number(value), prefix.span)
+                .compile_constant(Value::new_number(value), prefix.span)
                 .map(|_| ()),
             Token::LParen => self.compile_grouping(prefix, can_assign),
             Token::Minus | Token::Bang => self.compile_unary(prefix, can_assign),
             Token::Keyword(Keyword::Nil) => Ok(self.emit(Instruction::Nil, prefix.span)),
             Token::Keyword(Keyword::True) => Ok(self.emit(Instruction::True, prefix.span)),
             Token::Keyword(Keyword::False) => Ok(self.emit(Instruction::False, prefix.span)),
-            Token::String { value, .. } => self
-                .compile_constant(
-                    Value::new_object(Object::String(
-                        STRING_INTERNER.lock().unwrap().intern(value.to_string()),
-                    )),
-                    prefix.span,
-                )
-                .map(|_| ()),
+            Token::String { value, .. } => {
+                let value = self.string_interner.intern(value, self.gc);
+                let value = Value::new_string(value);
+                let compile_constant = self.compile_constant(value, prefix.span);
+                compile_constant.map(|_| ())
+            }
             Token::Ident(ident) => self.compile_variable(ident, prefix.span, can_assign),
             Token::Keyword(Keyword::This) => self.compile_this(prefix),
             Token::Keyword(Keyword::Super) => self.compile_super(prefix),
@@ -920,7 +928,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_super(&mut self, super_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_super(&mut self, super_kw: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         if self.current_class.is_none() {
             let kind = CompileErrorKind::Msg("can't use 'super' outside of a class".into());
             let err = CompileError::new(kind, super_kw.span);
@@ -945,7 +953,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn compile_this(&mut self, this_kw: Spanned<Token<'a>>) -> Result<(), StaticError<'a>> {
+    fn compile_this(&mut self, this_kw: Spanned<Token<'src>>) -> Result<(), StaticError<'src>> {
         if self.current_class.is_none() {
             let kind = CompileErrorKind::Msg("can't use 'this' outside of a class".into());
             let err = CompileError::new(kind, this_kw.span);
@@ -960,7 +968,7 @@ impl<'a> Compiler<'a> {
         ident: &str,
         span: Span,
         can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         self.compile_named_variable(ident, span, can_assign)
     }
 
@@ -969,7 +977,7 @@ impl<'a> Compiler<'a> {
         ident: &str,
         span: Span,
         can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let (get, set, span) = match Self::resolve_local(&self.chunk, ident, span.clone()) {
             Some(idx) => {
                 let idx = idx?;
@@ -1017,7 +1025,7 @@ impl<'a> Compiler<'a> {
         unit: &mut CompileUnit,
         ident: &str,
         span: Span,
-    ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
+    ) -> Option<Result<Spanned<u8>, StaticError<'src>>> {
         let Some(parent) = &mut unit.parent else {
             return None;
         };
@@ -1045,7 +1053,7 @@ impl<'a> Compiler<'a> {
         unit: &mut CompileUnit,
         idx: Spanned<u8>,
         is_local: bool,
-    ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
+    ) -> Option<Result<Spanned<u8>, StaticError<'src>>> {
         for (i, existing) in unit.upvalues.iter().enumerate() {
             if existing.index == idx.item && existing.is_local == is_local {
                 return Some(Ok(Spanned::new(i as u8, idx.span)));
@@ -1071,7 +1079,7 @@ impl<'a> Compiler<'a> {
         unit: &CompileUnit,
         ident: &str,
         span: Span,
-    ) -> Option<Result<Spanned<u8>, StaticError<'a>>> {
+    ) -> Option<Result<Spanned<u8>, StaticError<'src>>> {
         for (i, local) in unit.locals.iter().enumerate().rev() {
             if *local.ident.item == ident {
                 assert!(i < u8::MAX as usize);
@@ -1120,9 +1128,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_infix(
         &mut self,
-        infix: Spanned<Token<'a>>,
+        infix: Spanned<Token<'src>>,
         can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         match infix.item {
             Token::Plus
             | Token::Minus
@@ -1144,9 +1152,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_dot(
         &mut self,
-        _dot: Spanned<Token<'a>>,
+        _dot: Spanned<Token<'src>>,
         can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let ident = self.consume(Token::is_ident, || &[TokenKind::Ident])?;
         let ident = ident.map(|ident| ident.clone().try_into_ident().unwrap());
         let name_const_idx = self.compile_ident_constant(ident.clone())?;
@@ -1168,15 +1176,15 @@ impl<'a> Compiler<'a> {
 
     fn compile_call(
         &mut self,
-        lparen: Spanned<Token<'a>>,
+        lparen: Spanned<Token<'src>>,
         _can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let arg_count = self.compile_arg_list()?;
         self.emit(Instruction::Call(arg_count), lparen.span);
         Ok(())
     }
 
-    fn compile_arg_list(&mut self) -> Result<u8, StaticError<'a>> {
+    fn compile_arg_list(&mut self) -> Result<u8, StaticError<'src>> {
         let mut arg_count = 0;
         if !self.lexer.is_next(Token::is_rparen)? {
             loop {
@@ -1200,9 +1208,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_and(
         &mut self,
-        and: Spanned<Token<'a>>,
+        and: Spanned<Token<'src>>,
         _can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let end_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), and.span.clone());
         self.emit(Instruction::Pop, and.span);
         self.compile_precedence(Precedence::And)?;
@@ -1213,9 +1221,9 @@ impl<'a> Compiler<'a> {
 
     fn compile_or(
         &mut self,
-        or: Spanned<Token<'a>>,
+        or: Spanned<Token<'src>>,
         _can_assign: bool,
-    ) -> Result<(), StaticError<'a>> {
+    ) -> Result<(), StaticError<'src>> {
         let else_jump = self.emit_jump(Instruction::JumpIfFalse(u16::MAX), or.span.clone());
         let end_jump = self.emit_jump(Instruction::Jump(u16::MAX), or.span.clone());
         self.patch_jump(else_jump);

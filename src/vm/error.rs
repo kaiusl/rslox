@@ -40,8 +40,8 @@ pub enum RuntimeErrorKind {
     InvalidOperand { expected: &'static str },
 
     InvalidOperands { expected: &'static str },
-    UndefinedVariable { name: InternedString },
-    UndefinedProperty { name: InternedString },
+    UndefinedVariable { name: String },
+    UndefinedProperty { name: String },
     WrongNumberOfArguments { expected: usize, got: usize },
     Msg(Cow<'static, str>),
 }
@@ -58,11 +58,11 @@ impl fmt::Display for RuntimeErrorKind {
             }
 
             RuntimeErrorKind::UndefinedVariable { name } => {
-                write!(f, "undefined variable `{}`", **name)
+                write!(f, "undefined variable `{}`", name)
             }
 
             RuntimeErrorKind::UndefinedProperty { name } => {
-                write!(f, "undefined property `{}`", **name)
+                write!(f, "undefined property `{}`", name)
             }
 
             RuntimeErrorKind::WrongNumberOfArguments { expected, got } => {
