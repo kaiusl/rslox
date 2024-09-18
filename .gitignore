@@ -3,4 +3,7 @@
 .idea/*
 *.sh
 *.txt
+*.svg
+clox
+perf.data*
 test.lox

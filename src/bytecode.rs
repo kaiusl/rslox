@@ -154,6 +154,43 @@ pub enum OpCode {
 }
 
 impl OpCode {
+    pub const RETURN: u8 = OpCode::Return as u8;
+    pub const CONSTANT: u8 = OpCode::Constant as u8;
+    pub const NEGATE: u8 = OpCode::Negate as u8;
+    pub const ADD: u8 = OpCode::Add as u8;
+    pub const SUBTRACT: u8 = OpCode::Subtract as u8;
+    pub const MULTIPLY: u8 = OpCode::Multiply as u8;
+    pub const DIVIDE: u8 = OpCode::Divide as u8;
+    pub const NIL: u8 = OpCode::Nil as u8;
+    pub const TRUE: u8 = OpCode::True as u8;
+    pub const FALSE: u8 = OpCode::False as u8;
+    pub const NOT: u8 = OpCode::Not as u8;
+    pub const EQ: u8 = OpCode::Eq as u8;
+    pub const GT: u8 = OpCode::Gt as u8;
+    pub const LT: u8 = OpCode::Lt as u8;
+    pub const PRINT: u8 = OpCode::Print as u8;
+    pub const POP: u8 = OpCode::Pop as u8;
+    pub const DEFINE_GLOBAL: u8 = OpCode::DefineGlobal as u8;
+    pub const GET_GLOBAL: u8 = OpCode::GetGlobal as u8;
+    pub const SET_GLOBAL: u8 = OpCode::SetGlobal as u8;
+    pub const GET_LOCAL: u8 = OpCode::GetLocal as u8;
+    pub const SET_LOCAL: u8 = OpCode::SetLocal as u8;
+    pub const GET_UPVALUE: u8 = OpCode::GetUpvalue as u8;
+    pub const SET_UPVALUE: u8 = OpCode::SetUpvalue as u8;
+    pub const GET_PROPERTY: u8 = OpCode::GetProperty as u8;
+    pub const SET_PROPERTY: u8 = OpCode::SetProperty as u8;
+    pub const JUMP_IF_FALSE: u8 = OpCode::JumpIfFalse as u8;
+    pub const JUMP: u8 = OpCode::Jump as u8;
+    pub const LOOP: u8 = OpCode::Loop as u8;
+    pub const CALL: u8 = OpCode::Call as u8;
+    pub const CLOSURE: u8 = OpCode::Closure as u8;
+    pub const CLOSE_UPVALUE: u8 = OpCode::CloseUpvalue as u8;
+    pub const CLASS: u8 = OpCode::Class as u8;
+    pub const METHOD: u8 = OpCode::Method as u8;
+    pub const INVOKE: u8 = OpCode::Invoke as u8;
+    pub const INHERIT: u8 = OpCode::Inherit as u8;
+    pub const GET_SUPER: u8 = OpCode::GetSuper as u8;
+
     pub fn from_u8(byte: u8) -> Self {
         num_traits::FromPrimitive::from_u8(byte).unwrap()
     }

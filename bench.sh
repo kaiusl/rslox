@@ -8,5 +8,6 @@ do
     for ((i=0; i<${1:-1}; i++))
     do
         ./target/release/rslox -f ./crafting_interpreters_test_files/benchmark.ignore/$path.lox
+        #./clox ./crafting_interpreters_test_files/benchmark.ignore/$path.lox
     done
 done
