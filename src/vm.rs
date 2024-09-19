@@ -11,7 +11,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::bytecode::{BytesCursor, OpCode};
 use crate::value::{
     Gc, GcObj, InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction,
-    ObjInstance, ObjUpvalue, Object, StringInterner, Value, ValueInner,
+    ObjInstance, ObjUpvalue, Object, StringInterner, Value,
 };
 
 pub(crate) type BuildHasher = FnvBuildHasher;
@@ -119,11 +119,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self.string_interner.intern("", &mut self.gc);
         let fun = ObjFunction::new(name, bytecode, constants.into(), 0, 0);
         let instructions = fun.bytecode.clone();
-        let fun_value = Value::new_function(fun, &mut self.gc);
-        let fun = fun_value.try_into_function().unwrap();
+        let fun_value = Value::new_function(self.gc.new_object_inner(fun));
+        let fun = fun_value.try_as_function().unwrap();
         let closure = ObjClosure::new(fun, Vec::new());
-        let closure_value = Value::new_closure(closure, &mut self.gc);
-        let closure = closure_value.try_to_closure().unwrap();
+        let closure_value = Value::new_closure(self.gc.new_object_inner(closure));
+        let closure = closure_value.try_as_closure().unwrap();
         self.push(closure_value).unwrap();
         self.frame = CallFrame::new(BytesCursor::new(instructions), closure);
 
@@ -213,9 +213,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 OpCode::LT => self.binary_cmp_op(Self::lt_number)?,
                 OpCode::GT => self.binary_cmp_op(Self::gt_number)?,
 
-                OpCode::NIL => self.push(Value::new_nil())?,
-                OpCode::TRUE => self.push(Value::new_bool(true))?,
-                OpCode::FALSE => self.push(Value::new_bool(false))?,
+                OpCode::NIL => self.push(Value::NIL)?,
+                OpCode::TRUE => self.push(Value::TRUE)?,
+                OpCode::FALSE => self.push(Value::FALSE)?,
 
                 OpCode::PRINT => self.run_op_print(),
                 OpCode::POP => {
@@ -276,10 +276,10 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let entry = self
             .globals
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
         match entry {
             RawEntryMut::Vacant(entry) => {
-                entry.insert_hashed_nocheck(name.get_hash(), *name, value);
+                entry.insert_hashed_nocheck(name.get_hash(), name, value);
             }
             RawEntryMut::Occupied(mut entry) => {
                 entry.insert(value);
@@ -297,7 +297,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let raw_entry = self
             .globals
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
 
         if let Some((_, &value)) = raw_entry {
             self.push(value)
@@ -319,7 +319,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let entry = self
             .globals
             .raw_entry_mut()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
 
         match entry {
             RawEntryMut::Occupied(mut entry) => {
@@ -406,7 +406,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let prop_value = instance
             .properties
             .raw_entry()
-            .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
+            .from_key_hashed_nocheck(prop_name.get_hash(), &prop_name);
 
         match prop_value {
             Some((_, &value)) => {
@@ -420,14 +420,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 let method = class
                     .methods
                     .raw_entry()
-                    .from_key_hashed_nocheck(prop_name.get_hash(), prop_name);
+                    .from_key_hashed_nocheck(prop_name.get_hash(), &prop_name);
                 let Some((_, method)) = method else {
                     let kind = RuntimeErrorKind::UndefinedProperty {
                         name: prop_name.to_string(),
                     };
                     return Err(self.runtime_error(kind, 1));
                 };
-                let method = method.try_to_closure().unwrap();
+                let method = method.try_as_closure().unwrap();
                 drop(class);
                 drop(instance);
 
@@ -436,7 +436,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 self.maybe_run_gc();
                 let receiver = self.stack.pop().expect("expected receiver on stack");
                 let method = ObjBoundMethod::new(receiver, method);
-                let method = Value::new_bound_method(method, &mut self.gc);
+                let method = Value::new_bound_method(self.gc.new_object_inner(method));
 
                 self.push(method)
             }
@@ -447,11 +447,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         // Stack: bottom, .., instance, value_to_set
 
         let instance = self.stack.swap_remove(self.stack.len() - 2);
-        let Some(instance) = instance.try_into_instance() else {
+        let Some(instance) = instance.try_as_instance() else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
         };
-        let name = *self
+        let name = self
             .frame
             .expect_constant()
             .try_as_string()
@@ -488,7 +488,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .pop()
             .expect("tried to negate with no value on stack");
 
-        if let ValueInner::Number(v) = value.into_inner() {
+        if let Some(v) = value.try_as_number() {
             self.push(Value::new_number(-v))
         } else {
             let kind = RuntimeErrorKind::InvalidOperand { expected: "number" };
@@ -593,7 +593,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let fun = self
             .frame
             .expect_constant()
-            .try_to_function()
+            .try_as_function()
             .expect("expected a function on stack for op closure");
 
         #[cfg(feature = "debug_disassemble")]
@@ -638,7 +638,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         #[cfg(feature = "debug_gc")]
         println!("gc from op_closure");
         self.maybe_run_gc();
-        let closure = Value::new_closure(ObjClosure::new(fun, upvalues), &mut self.gc);
+        let closure = ObjClosure::new(fun, upvalues);
+        let closure = self.gc.new_object_inner(closure);
+        let closure = Value::new_closure(closure);
         self.push(closure)
     }
 
@@ -651,12 +653,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to get class name from non string");
         #[cfg(feature = "debug_gc")]
         println!("gc from op_class");
         self.maybe_run_gc();
-        let class = Value::new_class(ObjClass::new(name), &mut self.gc);
+        let class = self.gc.new_object_inner(RefCell::new(ObjClass::new(name)));
+        let class = Value::new_class(class);
         self.push(class)
     }
 
@@ -666,7 +669,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let name = self
             .frame
             .expect_constant()
-            .try_to_string()
+            .try_as_string()
             .expect("tried to get method name from non string");
         let method = self
             .stack
@@ -719,7 +722,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .try_u8()
             .expect("expected a second u8 operand for op invoke");
 
-        self.invoke(*name, arg_count)?;
+        self.invoke(name, arg_count)?;
         Ok(())
     }
 
@@ -752,7 +755,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn run_op_get_super(&mut self) -> Result<(), RuntimeError> {
         // Stack: bottom, .., superclass
 
-        let method_name = *self
+        let method_name = self
             .frame
             .expect_constant()
             .try_as_string()
@@ -765,7 +768,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             .try_as_class()
             .expect("expected superclass on stack");
         let superclass = superclass.borrow();
-        self.bind_method(&superclass, &method_name)?;
+        self.bind_method(&superclass, method_name)?;
         Ok(())
     }
 
@@ -804,7 +807,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             return Err(self.runtime_error(kind, 1));
         };
 
-        let method = method.try_to_closure().unwrap();
+        let method = method.try_as_closure().unwrap();
         drop(class);
         drop(instance);
         self.call_closure(method, arg_count)
@@ -833,11 +836,11 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     //     self.call_closure(method, arg_count)
     // }
 
-    fn bind_method(&mut self, class: &ObjClass, name: &InternedString) -> Result<(), RuntimeError> {
+    fn bind_method(&mut self, class: &ObjClass, name: InternedString) -> Result<(), RuntimeError> {
         let method = class
             .methods
             .raw_entry()
-            .from_key_hashed_nocheck(name.get_hash(), name);
+            .from_key_hashed_nocheck(name.get_hash(), &name);
 
         let Some((_, method)) = method else {
             let kind = RuntimeErrorKind::UndefinedProperty {
@@ -845,14 +848,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             };
             return Err(self.runtime_error(kind, 1));
         };
-        let method = method.try_to_closure().unwrap();
+        let method = method.try_as_closure().unwrap();
 
         #[cfg(feature = "debug_gc")]
         println!("gc from bind_method");
         self.maybe_run_gc();
         let receiver = self.stack.pop().expect("expected receiver on stack");
         let method = ObjBoundMethod::new(receiver, method);
-        let method = Value::new_bound_method(method, &mut self.gc);
+        let method = self.gc.new_value(method);
         self.push(method)
     }
 
@@ -883,17 +886,23 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         #[cfg(feature = "debug_gc")]
         println!("gc from capture upvalue");
         self.maybe_run_gc();
-        let upvalue = self.gc.new_object_inner(RefCell::new(ObjUpvalue::Open(index)));
+        let upvalue = self
+            .gc
+            .new_object_inner(RefCell::new(ObjUpvalue::Open(index)));
         self.open_upvalues.insert(index, GcObj::clone(&upvalue));
 
         upvalue
     }
 
     fn call_value(&mut self, callee: Value, arg_count: u8) -> Result<(), RuntimeError> {
-        match callee.into_inner() {
-            ValueInner::Object(Object::Closure(fun)) => self.call_closure(fun, arg_count),
+        match callee.get_tag() {
+            Value::TAG_CLOSURE => {
+                let fun = unsafe { callee.as_closure_unchecked() };
+                self.call_closure(fun, arg_count)
+            },
             //Value::Object(Object::Function(fun)) => self.call_function(&fun, arg_count),
-            ValueInner::Object(Object::NativeFn(fun)) => {
+            Value::TAG_NATIVE_FN => {
+                let fun = unsafe { callee.as_native_fn_unchecked() };
                 let result = fun(
                     arg_count,
                     &self.stack[self.stack.len() - arg_count as usize..],
@@ -902,12 +911,13 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .truncate(self.stack.len() - arg_count as usize - 1);
                 self.push(result)
             }
-            ValueInner::Object(Object::Class(cls)) => {
+            Value::TAG_CLASS=> {
+                let cls = unsafe { callee.as_class_unchecked() };
                 #[cfg(feature = "debug_gc")]
                 println!("gc from call value");
                 self.maybe_run_gc();
                 let instance = ObjInstance::new(GcObj::clone(&cls));
-                let instance = Value::new_instance(instance, &mut self.gc);
+                let instance = self.gc.new_value(RefCell::new(instance));
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = instance;
                 let class = cls.borrow();
@@ -918,7 +928,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                     .from_key_hashed_nocheck(self.init_name.get_hash(), &self.init_name);
 
                 if let Some((_, initializer)) = initializer {
-                    let initializer = initializer.try_to_closure().unwrap();
+                    let initializer = initializer.try_as_closure().unwrap();
                     self.call_closure(initializer, arg_count)?;
                 } else if arg_count != 0 {
                     let kind = RuntimeErrorKind::Msg(
@@ -932,7 +942,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
                 // self.push(instance);
                 Ok(())
             }
-            ValueInner::Object(Object::BoundMethod(method)) => {
+            Value::TAG_BOUND_METHOD => {
+                let method = unsafe { callee.as_bound_method_unchecked() };
                 let receiver_slot = self.stack.len() - arg_count as usize - 1;
                 self.stack[receiver_slot] = method.receiver;
                 self.call_closure(GcObj::clone(&method.method), arg_count)
@@ -947,7 +958,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn define_native(&mut self, name: impl Into<String> + AsRef<str>, fun: NativeFn) {
         let name = self.string_interner.intern(name, &mut self.gc);
-        let fun = Value::new_native_fn(fun, &mut self.gc);
+        let fun = self.gc.new_value(fun);
         self.globals.insert(name, fun);
     }
 
@@ -1019,39 +1030,33 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn run_binary_add(&mut self) -> Result<(), RuntimeError> {
         let op = Self::add_number;
-        let rhs = self.stack.pop().map(Value::into_inner);
-        let lhs = self.stack.pop().map(Value::into_inner);
-        match (lhs, rhs) {
-            (Some(ValueInner::Number(lhs)), Some(ValueInner::Number(rhs))) => {
-                let result = op(lhs, rhs);
-                self.push(Value::new_number(result))
-            }
-            (Some(ValueInner::Object(lhs)), Some(ValueInner::Object(rhs))) => match (lhs, rhs) {
-                (Object::String(lhs), Object::String(rhs)) => {
-                    let new = lhs.to_string() + &rhs;
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
 
-                    #[cfg(feature = "debug_gc")]
-                    println!("gc from run_binary_add");
-                    self.maybe_run_gc();
-                    let new = self.string_interner.intern(new, &mut self.gc);
-                    let value = Value::new_string(new);
-                    self.push(value)
-                }
-                _ => {
-                    let kind = RuntimeErrorKind::InvalidOperands {
-                        expected: "two numbers or string",
-                    };
-                    Err(self.runtime_error(kind, 1))
-                }
-            },
-            (Some(_), Some(_)) => {
+        if let (Some(lhs), Some(rhs)) = (lhs.try_as_number(), rhs.try_as_number()) {
+            let result = op(lhs, rhs);
+            self.push(Value::new_number(result))?;
+            return Ok(());
+        }
+
+        match (lhs.get_tag(), rhs.get_tag()) {
+            (Value::TAG_STRING, Value::TAG_STRING) => {
+                let lhs = unsafe { lhs.as_string_unchecked() };
+                let rhs = unsafe { rhs.as_string_unchecked() };
+                let new = lhs.to_string() + &rhs;
+
+                #[cfg(feature = "debug_gc")]
+                println!("gc from run_binary_add");
+                self.maybe_run_gc();
+                let new = self.string_interner.intern(new, &mut self.gc);
+                let value = Value::new_string(new);
+                self.push(value)
+            }
+            _ => {
                 let kind = RuntimeErrorKind::InvalidOperands {
                     expected: "two numbers or string",
                 };
                 Err(self.runtime_error(kind, 1))
-            }
-            _ => {
-                panic!("tried to do binary add with not enough values on stack")
             }
         }
     }
@@ -1060,10 +1065,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn binary_arithmetic_op(&mut self, op: impl Fn(f64, f64) -> f64) -> Result<(), RuntimeError> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
-        match (lhs.into_inner(), rhs.into_inner()) {
-            (ValueInner::Number(lhs), ValueInner::Number(rhs)) => {
-                self.push(Value::new_number(op(lhs, rhs)))
-            }
+        match (lhs.try_as_number(), rhs.try_as_number()) {
+            (Some(lhs), Some(rhs)) => self.push(Value::new_number(op(lhs, rhs))),
             (_, _) => {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 Err(self.runtime_error(kind, 1))
@@ -1075,10 +1078,8 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
-        match (lhs.into_inner(), rhs.into_inner()) {
-            (ValueInner::Number(lhs), ValueInner::Number(rhs)) => {
-                self.push(Value::new_bool(op(lhs, rhs)))
-            }
+        match (lhs.try_as_number(), rhs.try_as_number()) {
+            (Some(lhs), Some(rhs)) => self.push(Value::new_bool(op(lhs, rhs))),
             (_, _) => {
                 let kind = RuntimeErrorKind::InvalidOperands { expected: "number" };
                 Err(self.runtime_error(kind, 1))
@@ -1176,14 +1177,14 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             println!("gc: marking roots");
         }
 
-        self.gc.mark_obj(Object::String(self.init_name));
+        self.gc.mark_obj(Object::new_string(self.init_name));
 
         for it in self.stack.iter() {
             self.gc.mark_value(it);
         }
 
         for (k, v) in self.globals.iter() {
-            let k = Object::String(*k);
+            let k = Object::new_string(*k);
             self.gc.mark_obj(k);
             self.gc.mark_value(v);
         }
@@ -1195,7 +1196,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         }
 
         for it in self.open_upvalues.values() {
-            let obj = Object::Upvalue(*it);
+            let obj = Object::new_upvalue(*it);
             self.gc.mark_obj(obj);
         }
 

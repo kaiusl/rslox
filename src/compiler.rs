@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use crate::bytecode::{ByteCode, Instruction};
 use crate::common::{Span, Spanned};
 use crate::lexer::{Keyword, Lexer, PeekableLexer, Token, TokenKind};
-use crate::value::{Gc, GcObj, InternedString, ObjFunction, Object, ValueInner};
+use crate::value::{Gc, GcObj, InternedString, ObjFunction, Object};
 use crate::value::{StringInterner, Value};
 
 use num_traits::FromPrimitive;
@@ -94,7 +94,6 @@ impl<'src, 'vm> Compiler<'src, 'vm> {
         gc: &'vm mut Gc,
         string_interner: &'vm mut StringInterner,
     ) -> Self {
-
         let this = string_interner.intern("this", gc);
 
         Self {
@@ -361,7 +360,7 @@ impl<'src, 'vm> Compiler<'src, 'vm> {
             arity,
             function_bytecode.upvalues.len(),
         );
-        let fun = Value::new_function(fun, &mut self.gc);
+        let fun = self.gc.new_value(fun);
 
         let span = fun_kw.map(|s| s.span).unwrap_or_else(|| name.span.clone());
         let idx = self.add_constant(fun);

@@ -5,12 +5,12 @@ use hashbrown::HashMap;
 
 use crate::bytecode::{BytesCursor, Instruction};
 use crate::common::Span;
-use crate::value::ValueInner;
+use crate::value::Value;
 use crate::vm::BuildHasher;
 
 #[derive(Debug, Clone)]
 pub struct Disassembler {
-    pub constants: Rc<[ValueInner]>,
+    pub constants: Rc<[Value]>,
     pub spans: Rc<HashMap<usize, Span, BuildHasher>>,
     pub cursor: BytesCursor,
     pub prev_line: Option<usize>,
@@ -20,7 +20,7 @@ impl Disassembler {
     pub fn new(
         code: Rc<[u8]>,
         spans: Rc<HashMap<usize, Span, BuildHasher>>,
-        constants: Rc<[ValueInner]>,
+        constants: Rc<[Value]>,
     ) -> Disassembler {
         Disassembler {
             constants,
@@ -60,7 +60,7 @@ impl Disassembler {
                 }
 
                 if let Instruction::Closure(idx) = op {
-                    let fun = &self.constants[idx as usize].try_to_function().unwrap();
+                    let fun = &self.constants[idx as usize].try_as_function().unwrap();
                     for _ in 0..fun.upvalues_count {
                         let is_local = self.cursor.try_u8().unwrap();
                         let index = self.cursor.try_u8().unwrap();

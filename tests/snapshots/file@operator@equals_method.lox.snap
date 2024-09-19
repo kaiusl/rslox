@@ -5,7 +5,7 @@ input_file: crafting_interpreters_test_files/operator/equals_method.lox
 ---
 OUT: 
 true
-true
+false
 
 ===
 ERR:
