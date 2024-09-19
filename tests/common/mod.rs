@@ -23,7 +23,8 @@ pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
     let src = std::fs::read_to_string(path).unwrap();
     let mut out = Vec::<u8>::new();
     let mut outerr = Vec::<u8>::new();
-    let mut vm = rslox::Vm::with_output(&mut out, &mut outerr);
+    let mut stack = create_stack();
+    let mut vm = rslox::Vm::with_output(&mut stack, &mut out, &mut outerr);
     if vm.compile(&src).is_ok() {
         vm.run(&src);
     };
@@ -84,4 +85,5 @@ macro_rules! test_dir {
     };
 }
 
+use rslox::stack::create_stack;
 pub(crate) use test_dir;

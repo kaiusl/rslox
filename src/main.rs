@@ -5,12 +5,14 @@ use std::path::PathBuf;
 use rslox::compiler::Compiler;
 #[cfg(feature = "debug_disassemble")]
 use rslox::disassembler::Disassembler;
+use rslox::stack::create_stack;
 use rslox::vm::Vm;
 
 use clap::Parser;
 
 fn main() {
     let args = Args::parse();
+    let mut stack = create_stack();
     match args.file {
         Some(file) => {
             let input = std::fs::read_to_string(file).unwrap();
@@ -26,12 +28,12 @@ fn main() {
                 );
                 disassembler.print();
             }
-            let mut vm = Vm::new();
+            let mut vm = Vm::new(&mut stack);
             vm.compile(&input).unwrap();
             vm.run(&input);
         }
         None => {
-            let mut vm = Vm::new();
+            let mut vm = Vm::new(&mut stack);
             let mut buffer = String::new();
             const PROMPT: &str = ">> ";
             loop {

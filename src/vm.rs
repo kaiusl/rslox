@@ -2,6 +2,7 @@ use core::panic;
 use std::cell::{RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
+use std::mem;
 use std::rc::Rc;
 
 use fnv::FnvBuildHasher;
@@ -9,6 +10,7 @@ use hashbrown::hash_map::RawEntryMut;
 use hashbrown::{HashMap, HashSet};
 
 use crate::bytecode::{BytesCursor, OpCode};
+use crate::stack::{Stack, STACK_MAX};
 use crate::value::{
     Gc, GcObj, InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction,
     ObjInstance, ObjUpvalue, Object, StringInterner, Value,
@@ -24,12 +26,10 @@ use self::error::{RuntimeError, RuntimeErrorKind};
 pub mod error;
 
 const MAX_FRAMES: usize = 64;
-const STACK_MAX: usize = 1024;
-type Stack<T> = arrayvec::ArrayVec<T, STACK_MAX>;
 
 #[derive(Debug)]
-pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
-    pub stack: Stack<Value>,
+pub struct Vm<'stack, OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
+    pub stack: Stack<'stack>,
     pub globals: HashMap<InternedString, Value, BuildHasher>,
     pub call_frames: arrayvec::ArrayVec<CallFrame, MAX_FRAMES>,
     pub frame: CallFrame,
@@ -47,14 +47,14 @@ pub struct Vm<OUT = std::io::Stdout, OUTERR = std::io::Stderr> {
     pub disassembler: Disassembler,
 }
 
-impl Vm {
-    pub fn new() -> Self {
-        Self::with_output(std::io::stdout(), std::io::stderr())
+impl<'stack> Vm<'stack> {
+    pub fn new(stack: &'stack mut [Value; STACK_MAX]) -> Self {
+        Self::with_output(stack, std::io::stdout(), std::io::stderr())
     }
 }
 
-impl<OUT, OUTERR> Vm<OUT, OUTERR> {
-    pub fn with_output(output: OUT, outerr: OUTERR) -> Self {
+impl<'stack, OUT, OUTERR> Vm<'stack, OUT, OUTERR> {
+    pub fn with_output(stack: &'stack mut [Value; STACK_MAX], output: OUT, outerr: OUTERR) -> Self {
         #[cfg(feature = "debug_trace")]
         let disassembler = Disassembler::new(ByteCode::new(), Vec::new());
 
@@ -64,7 +64,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
         let mut vm = Vm {
             // SAFETY: this frame will never be actually used, self.compile must be called before vm can be used and that sets a new frame
             frame: CallFrame::new(BytesCursor::new(Rc::new([])), unsafe { GcObj::dangling() }),
-            stack: Stack::new(),
+            stack: Stack::new(stack),
             globals: HashMap::default(),
             call_frames: arrayvec::ArrayVec::new(),
             open_upvalues: BTreeMap::new(),
@@ -159,7 +159,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn push(&mut self, value: Value) -> Result<(), RuntimeError> {
-        match self.stack.try_push(value) {
+        match self.stack.push(value) {
             Ok(_) => Ok(()),
             Err(_) => {
                 let kind = RuntimeErrorKind::Msg("stack overflow".into());
@@ -446,7 +446,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     fn run_op_set_property(&mut self) -> Result<(), RuntimeError> {
         // Stack: bottom, .., instance, value_to_set
 
-        let instance = self.stack.swap_remove(self.stack.len() - 2);
+        let instance = self.stack.swap_remove(self.stack.len() - 2).unwrap();
         let Some(instance) = instance.try_as_instance() else {
             let kind = RuntimeErrorKind::Msg("only instances have properties".into());
             return Err(self.runtime_error(kind, 1));
@@ -506,13 +506,9 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
     }
 
     fn run_op_eq(&mut self) -> Result<(), RuntimeError> {
-        let rhs = self
+        let (lhs, rhs) = self
             .stack
-            .pop()
-            .expect("tried to eq with no rhs value on stack");
-        let lhs = self
-            .stack
-            .pop()
+            .pop2()
             .expect("tried to eq with no lhs value on stack");
 
         self.push(Value::new_bool(lhs == rhs))
@@ -899,19 +895,18 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
             Value::TAG_CLOSURE => {
                 let fun = unsafe { callee.as_closure_unchecked() };
                 self.call_closure(fun, arg_count)
-            },
+            }
             //Value::Object(Object::Function(fun)) => self.call_function(&fun, arg_count),
             Value::TAG_NATIVE_FN => {
                 let fun = unsafe { callee.as_native_fn_unchecked() };
                 let result = fun(
                     arg_count,
-                    &self.stack[self.stack.len() - arg_count as usize..],
+                    &self.stack[self.stack.len() - arg_count as usize - 1..],
                 );
-                self.stack
-                    .truncate(self.stack.len() - arg_count as usize - 1);
+                self.stack.pop_n(arg_count as usize + 1);
                 self.push(result)
             }
-            Value::TAG_CLASS=> {
+            Value::TAG_CLASS => {
                 let cls = unsafe { callee.as_class_unchecked() };
                 #[cfg(feature = "debug_gc")]
                 println!("gc from call value");
@@ -1030,8 +1025,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     fn run_binary_add(&mut self) -> Result<(), RuntimeError> {
         let op = Self::add_number;
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
+        let (lhs, rhs) = self.stack.pop2().unwrap();
 
         if let (Some(lhs), Some(rhs)) = (lhs.try_as_number(), rhs.try_as_number()) {
             let result = op(lhs, rhs);
@@ -1063,8 +1057,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     #[inline]
     fn binary_arithmetic_op(&mut self, op: impl Fn(f64, f64) -> f64) -> Result<(), RuntimeError> {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
+        let (lhs, rhs) = self.stack.pop2().unwrap();
         match (lhs.try_as_number(), rhs.try_as_number()) {
             (Some(lhs), Some(rhs)) => self.push(Value::new_number(op(lhs, rhs))),
             (_, _) => {
@@ -1076,8 +1069,7 @@ impl<OUT, OUTERR> Vm<OUT, OUTERR> {
 
     #[inline]
     fn binary_cmp_op(&mut self, op: impl Fn(f64, f64) -> bool) -> Result<(), RuntimeError> {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
+        let (lhs, rhs) = self.stack.pop2().unwrap();
         match (lhs.try_as_number(), rhs.try_as_number()) {
             (Some(lhs), Some(rhs)) => self.push(Value::new_bool(op(lhs, rhs))),
             (_, _) => {
