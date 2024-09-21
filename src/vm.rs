@@ -1118,7 +1118,7 @@ impl<'stack, OUT, OUTERR> Vm<'stack, OUT, OUTERR> {
             .get(&(self.frame.instructions.offset() - offset))
             .cloned()
             .map(|span| span.into());
-        RuntimeError { kind, span }
+        RuntimeError::new(kind, span)
     }
 
     /// Expects that next byte in instructions is a local index and reads the local

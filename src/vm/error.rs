@@ -1,35 +1,20 @@
 use core::fmt;
 use std::borrow::Cow;
 
-use crate::compiler::error::StaticError;
-use crate::value::InternedString;
+#[derive(Debug, thiserror::Error, miette::Diagnostic, Clone)]
+#[error(transparent)]
+#[diagnostic(transparent)]
+pub struct RuntimeError(Box<RuntimeErrorCore>);
 
-#[derive(thiserror::Error, miette::Diagnostic, Debug, Clone)]
-pub enum InterpretError<'a> {
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Static(StaticError<'a>),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Runtime(RuntimeError),
-}
-
-impl<'a> From<StaticError<'a>> for InterpretError<'a> {
-    fn from(err: StaticError<'a>) -> Self {
-        Self::Static(err)
-    }
-}
-
-impl<'a> From<RuntimeError> for InterpretError<'a> {
-    fn from(err: RuntimeError) -> Self {
-        Self::Runtime(err)
+impl RuntimeError {
+    pub fn new(kind: RuntimeErrorKind, span: Option<miette::SourceSpan>) -> Self {
+        Self(Box::new(RuntimeErrorCore { kind, span }))
     }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic, Clone)]
 #[error("{kind}")]
-pub struct RuntimeError {
+pub struct RuntimeErrorCore {
     #[label("here")]
     pub span: Option<miette::SourceSpan>,
     pub kind: RuntimeErrorKind,
