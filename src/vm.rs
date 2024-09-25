@@ -184,58 +184,59 @@ impl<'stack, OUT, OUTERR> Vm<'stack, OUT, OUTERR> {
                 self.disassembler.print_next();
             }
 
+            let op = OpCode::from_u8(op);
+
             match op {
-                OpCode::RETURN => self.run_op_return()?,
-                OpCode::CONSTANT => self.run_op_constant()?,
+                OpCode::Return => self.run_op_return()?,
+                OpCode::Constant => self.run_op_constant()?,
 
-                OpCode::DEFINE_GLOBAL => self.run_op_define_global(),
-                OpCode::GET_GLOBAL => self.run_op_get_global()?,
-                OpCode::SET_GLOBAL => self.run_op_set_global()?,
+                OpCode::DefineGlobal => self.run_op_define_global(),
+                OpCode::GetGlobal => self.run_op_get_global()?,
+                OpCode::SetGlobal => self.run_op_set_global()?,
 
-                OpCode::GET_LOCAL => self.run_op_get_local()?,
-                OpCode::SET_LOCAL => self.run_op_set_local(),
+                OpCode::GetLocal => self.run_op_get_local()?,
+                OpCode::SetLocal => self.run_op_set_local(),
 
-                OpCode::GET_UPVALUE => self.run_on_get_upvalue()?,
-                OpCode::SET_UPVALUE => self.run_op_set_upvalue(),
+                OpCode::GetUpvalue => self.run_on_get_upvalue()?,
+                OpCode::SetUpvalue => self.run_op_set_upvalue(),
 
-                OpCode::GET_PROPERTY => self.run_op_get_property()?,
-                OpCode::SET_PROPERTY => self.run_op_set_property()?,
+                OpCode::GetProperty => self.run_op_get_property()?,
+                OpCode::SetProperty => self.run_op_set_property()?,
 
-                OpCode::NEGATE => self.run_op_negate()?,
-                OpCode::NOT => self.run_op_not()?,
+                OpCode::Negate => self.run_op_negate()?,
+                OpCode::Not => self.run_op_not()?,
 
-                OpCode::ADD => self.run_binary_add()?,
-                OpCode::SUBTRACT => self.binary_arithmetic_op(Self::subtract_number)?,
-                OpCode::MULTIPLY => self.binary_arithmetic_op(Self::multiply_number)?,
-                OpCode::DIVIDE => self.binary_arithmetic_op(Self::divide_number)?,
+                OpCode::Add => self.run_binary_add()?,
+                OpCode::Subtract => self.binary_arithmetic_op(Self::subtract_number)?,
+                OpCode::Multiply => self.binary_arithmetic_op(Self::multiply_number)?,
+                OpCode::Divide => self.binary_arithmetic_op(Self::divide_number)?,
 
-                OpCode::EQ => self.run_op_eq()?,
-                OpCode::LT => self.binary_cmp_op(Self::lt_number)?,
-                OpCode::GT => self.binary_cmp_op(Self::gt_number)?,
+                OpCode::Eq => self.run_op_eq()?,
+                OpCode::Lt => self.binary_cmp_op(Self::lt_number)?,
+                OpCode::Gt => self.binary_cmp_op(Self::gt_number)?,
 
-                OpCode::NIL => self.push(Value::NIL)?,
-                OpCode::TRUE => self.push(Value::TRUE)?,
-                OpCode::FALSE => self.push(Value::FALSE)?,
+                OpCode::Nil => self.push(Value::NIL)?,
+                OpCode::True => self.push(Value::TRUE)?,
+                OpCode::False => self.push(Value::FALSE)?,
 
-                OpCode::PRINT => self.run_op_print(),
-                OpCode::POP => {
+                OpCode::Print => self.run_op_print(),
+                OpCode::Pop => {
                     self.stack.pop();
                 }
 
-                OpCode::JUMP_IF_FALSE => self.run_op_jump_if_false(),
-                OpCode::JUMP => self.run_op_jump(),
+                OpCode::JumpIfFalse => self.run_op_jump_if_false(),
+                OpCode::Jump => self.run_op_jump(),
 
-                OpCode::LOOP => self.run_op_loop(),
-                OpCode::CALL => self.run_op_call()?,
-                OpCode::CLOSURE => self.run_op_closure()?,
-                OpCode::CLOSE_UPVALUE => self.run_op_close_upvalue(),
+                OpCode::Loop => self.run_op_loop(),
+                OpCode::Call => self.run_op_call()?,
+                OpCode::Closure => self.run_op_closure()?,
+                OpCode::CloseUpvalue => self.run_op_close_upvalue(),
 
-                OpCode::CLASS => self.run_op_class()?,
-                OpCode::METHOD => self.run_op_method(),
-                OpCode::INVOKE => self.run_op_invoke()?,
-                OpCode::INHERIT => self.run_op_inherit()?,
-                OpCode::GET_SUPER => self.run_op_get_super()?,
-                _ => unreachable!(),
+                OpCode::Class => self.run_op_class()?,
+                OpCode::Method => self.run_op_method(),
+                OpCode::Invoke => self.run_op_invoke()?,
+                OpCode::Inherit => self.run_op_inherit()?,
+                OpCode::GetSuper => self.run_op_get_super()?,
             }
         }
 
