@@ -9,7 +9,7 @@ use fnv::FnvBuildHasher;
 use hashbrown::hash_map::RawEntryMut;
 use hashbrown::{HashMap, HashSet};
 
-use crate::bytecode::{BytesCursor, OpCode};
+use crate::bytecode::{BytesCursor, Instruction, OpCode};
 use crate::stack::{Stack, STACK_MAX};
 use crate::value::{
     Gc, GcObj, InternedString, NativeFn, ObjBoundMethod, ObjClass, ObjClosure, ObjFunction,
@@ -189,6 +189,7 @@ impl<'stack, OUT, OUTERR> Vm<'stack, OUT, OUTERR> {
             match op {
                 OpCode::Return => self.run_op_return()?,
                 OpCode::Constant => self.run_op_constant()?,
+                OpCode::ConstantLong => self.run_op_constant_long()?,
 
                 OpCode::DefineGlobal => self.run_op_define_global(),
                 OpCode::GetGlobal => self.run_op_get_global()?,
@@ -260,6 +261,11 @@ impl<'stack, OUT, OUTERR> Vm<'stack, OUT, OUTERR> {
 
     fn run_op_constant(&mut self) -> Result<(), RuntimeError> {
         let value = *self.frame.expect_constant();
+        self.push(value)
+    }
+
+    fn run_op_constant_long(&mut self) -> Result<(), RuntimeError> {
+        let value = *self.frame.expect_constant_long();
         self.push(value)
     }
 
@@ -1224,6 +1230,25 @@ impl CallFrame {
             .instructions
             .try_u8()
             .expect("tried to read constant with no more instructions");
+        if false {
+            let _ = Instruction::Constant(idx);
+        }
+        self.closure
+            .fun
+            .constants
+            .get(idx as usize)
+            .expect("tried to get constant at invalid index")
+    }
+
+    /// Expects that next byte in instructions is a constant index and reads the constant
+    fn expect_constant_long(&mut self) -> &Value {
+        let idx = self
+            .instructions
+            .try_u32()
+            .expect("tried to read constant with no more instructions");
+        if false {
+            let _ = Instruction::ConstantLong(idx);
+        }
         self.closure
             .fun
             .constants

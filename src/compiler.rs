@@ -799,17 +799,20 @@ impl<'src, 'vm> Compiler<'src, 'vm> {
         self.compile_precedence(Precedence::Assignment)
     }
 
-    fn compile_constant(&mut self, value: Value, span: Span) -> Result<u8, StaticError<'src>> {
+    fn compile_constant(&mut self, value: Value, span: Span) -> Result<usize, StaticError<'src>> {
         let idx = self.add_constant(value);
-        let Ok(idx) = u8::try_from(idx) else {
+
+        if let Ok(idx_u8) = u8::try_from(idx) {
+            self.emit(Instruction::Constant(idx_u8), span);
+            Ok(idx)
+        } else if let Ok(idx_u32) = u32::try_from(idx) {
+            self.emit(Instruction::ConstantLong(idx_u32), span);
+            Ok(idx)
+        } else {
             let kind = CompileErrorKind::Msg("too many constants".into());
             let err = CompileError::new(kind, span);
-            return Err(err.into());
-        };
-
-        self.emit(Instruction::Constant(idx), span);
-
-        Ok(idx)
+            Err(err.into())
+        }
     }
 
     fn compile_grouping(

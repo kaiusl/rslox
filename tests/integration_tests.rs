@@ -416,3 +416,10 @@ test_dir!(
     precedence,
     unexpected_character,
 );
+
+test_dir!(
+    new;
+    many;
+    "./test_files";
+    constants_long,
+);

@@ -82,7 +82,7 @@ impl BytesCursor {
         self.array::<LEN>().map(u16::from_le_bytes)
     }
 
-    pub fn u32(&mut self) -> Option<u32> {
+    pub fn try_u32(&mut self) -> Option<u32> {
         const LEN: usize = std::mem::size_of::<u32>();
         self.array::<LEN>().map(u32::from_le_bytes)
     }
@@ -117,6 +117,7 @@ impl BytesCursor {
 pub enum OpCode {
     Return,
     Constant,
+    ConstantLong,
     Negate,
     Add,
     Subtract,
@@ -169,6 +170,7 @@ impl OpCode {
 pub enum Instruction {
     Return,
     Constant(u8),
+    ConstantLong(u32),
     Negate,
     Add,
     Subtract,
@@ -210,6 +212,7 @@ impl Instruction {
         match self {
             Instruction::Return => OpCode::Return,
             Instruction::Constant(_) => OpCode::Constant,
+            Instruction::ConstantLong(_) => OpCode::ConstantLong,
             Instruction::Negate => OpCode::Negate,
             Instruction::Add => OpCode::Add,
             Instruction::Subtract => OpCode::Subtract,
@@ -300,6 +303,10 @@ impl Instruction {
                 dst.push(*idx);
                 dst.push(*arg_count);
             }
+
+            Instruction::ConstantLong(idx) => {
+                dst.extend_from_slice(&idx.to_le_bytes());
+            }
         }
     }
 
@@ -308,6 +315,14 @@ impl Instruction {
             Some(OpCode::Return) => Instruction::Return,
             Some(OpCode::Constant) => match bytes.try_u8() {
                 Some(idx) => Instruction::Constant(idx),
+                None => {
+                    return Err(DisassemblerError {
+                        message: Cow::Borrowed("Expected constant index"),
+                    })
+                }
+            },
+            Some(OpCode::ConstantLong) => match bytes.try_u32() {
+                Some(idx) => Instruction::ConstantLong(idx),
                 None => {
                     return Err(DisassemblerError {
                         message: Cow::Borrowed("Expected constant index"),
@@ -542,6 +557,8 @@ impl Instruction {
             Instruction::Invoke(idx, arg_count) => {
                 mem::size_of_val(idx) + mem::size_of_val(arg_count)
             }
+
+            Instruction::ConstantLong(idx) => mem::size_of_val(idx),
         }
     }
 }
@@ -551,6 +568,7 @@ impl fmt::Display for Instruction {
         match self {
             Instruction::Return => write!(f, "RETURN"),
             Instruction::Constant(idx) => write!(f, "CONSTANT {}", idx),
+            Instruction::ConstantLong(idx) => write!(f, "CONSTANT_LONG {}", idx),
             Instruction::Negate => write!(f, "NEGATE"),
             Instruction::Add => write!(f, "ADD"),
             Instruction::Subtract => write!(f, "SUBTRACT"),
