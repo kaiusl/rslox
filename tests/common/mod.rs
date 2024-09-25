@@ -5,9 +5,8 @@
     reason = "these methods are used in other modules of integration tests, but compiler doesn't see it"
 )]
 
-pub const ROOT: &str = "./crafting_interpreters_test_files";
-
-pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
+pub(crate) fn test_file(prefix: &str, root: impl AsRef<str>, path: impl AsRef<std::path::Path>) {
+    let root = root.as_ref();
     miette::set_hook(Box::new(|_| {
         Box::new(
             miette::MietteHandlerOpts::new()
@@ -29,9 +28,9 @@ pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
         vm.run(&src);
     };
 
-    let root_dir = &ROOT[2..];
+    let root_dir = &root[2..];
     let mut settings = insta::Settings::clone_current();
-    let mut suffix = String::new();
+    let mut suffix = String::from(prefix);
     for c in path.components() {
         let str = c.as_os_str().to_str().unwrap();
         if !str.is_empty() && str != "." && str != root_dir {
@@ -61,25 +60,25 @@ pub(crate) fn test_file(path: impl AsRef<std::path::Path>) {
 
 // Note that we append _ to the test name so that we can use Rust keywords as $file
 macro_rules! test_dir {
-    ($type:tt; $($file:tt),+ $(,)?) => {
+    ($prefix:ident; $type:tt; $root:literal; $($file:tt),+ $(,)?) => {
         ::paste::paste!{
             #[::rstest::rstest]
             $(
                 #[case::[<$file _>](concat!(stringify!($file), ".lox"))]
             )+
-            fn [<test_ $type>](#[case] path: &str) {
-                test_file(::std::format!("{ROOT}/{}/{}", ::std::stringify!($type), path));
+            fn [<test_ $prefix _ $type>](#[case] path: &str) {
+                test_file(::std::stringify!($prefix), $root, ::std::format!("{}/{}/{}", $root, ::std::stringify!($type), path));
             }
         }
     };
-    ($($file:tt),+ $(,)?) => {
+    ($prefix:ident; $root:literal; $($file:tt),+ $(,)?) => {
         ::paste::paste!{
             #[::rstest::rstest]
             $(
                 #[case::[<$file _>](concat!(stringify!($file), ".lox"))]
             )+
-            fn test_root(#[case] path: &str) {
-                test_file(::std::format!("{ROOT}/{}",  path));
+            fn [< test_ $prefix  _root>](#[case] path: &str) {
+                test_file(::std::stringify!($prefix), $root, ::std::format!("{}/{}", $root,  path));
             }
         }
     };

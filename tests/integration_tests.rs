@@ -6,7 +6,9 @@ mod common;
 use common::*;
 
 test_dir!(
+    base;
     operator;
+    "./crafting_interpreters_test_files";
     add_num_nil,
     comparison,
     add_nil_nil,
@@ -43,7 +45,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     class;
+    "./crafting_interpreters_test_files";
     inherit_self,
     local_inherit_other,
     local_inherit_self,
@@ -54,7 +58,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     super;
+    "./crafting_interpreters_test_files";
     super_without_name,
     call_other_method,
     parenthesized,
@@ -78,7 +84,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     function;
+    "./crafting_interpreters_test_files";
     recursion,
     nested_call_with_arguments,
     print,
@@ -96,7 +104,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     return;
+    "./crafting_interpreters_test_files";
     after_while,
     in_method,
     return_nil_if_no_value,
@@ -107,22 +117,28 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     block;
+    "./crafting_interpreters_test_files";
     scope,
     empty,
 );
 
-// test_dir!(
-//     limit;
-//     too_many_constants,
-//     loop_too_large,
-//     too_many_locals,
-//     stack_overflow,
-//     too_many_upvalues,
-// );
+test_dir!(
+    base;
+    limit;
+    "./crafting_interpreters_test_files";
+    too_many_constants,
+    loop_too_large,
+    too_many_locals,
+    stack_overflow,
+    too_many_upvalues,
+);
 
 test_dir!(
+    base;
     if;
+    "./crafting_interpreters_test_files";
     var_in_else,
     truth,
     else,
@@ -136,7 +152,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     logical_operator;
+    "./crafting_interpreters_test_files";
     or_truth,
     or,
     and,
@@ -144,7 +162,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     for;
+    "./crafting_interpreters_test_files";
     closure_in_body,
     statement_condition,
     syntax,
@@ -159,7 +179,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     comments;
+    "./crafting_interpreters_test_files";
     line_at_eof,
     only_line_comment_and_line,
     unicode,
@@ -167,7 +189,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     assignment;
+    "./crafting_interpreters_test_files";
     associativity,
     to_this,
     undefined,
@@ -180,12 +204,16 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     nil;
+    "./crafting_interpreters_test_files";
     literal,
 );
 
 test_dir!(
+    base;
     inheritance;
+    "./crafting_interpreters_test_files";
     inherit_from_nil,
     inherit_methods,
     inherit_from_number,
@@ -196,7 +224,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     while;
+    "./crafting_interpreters_test_files";
     closure_in_body,
     syntax,
     fun_in_body,
@@ -207,7 +237,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     variable;
+    "./crafting_interpreters_test_files";
     use_nil_as_var,
     shadow_local,
     use_global_in_initializer,
@@ -233,24 +265,32 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     regression;
+    "./crafting_interpreters_test_files";
     _40,
     _394,
 );
 
 test_dir!(
+    base;
     bool;
+    "./crafting_interpreters_test_files";
     equality,
     not,
 );
 
 test_dir!(
+    base;
     print;
+    "./crafting_interpreters_test_files";
     missing_argument,
 );
 
 test_dir!(
+    base;
     closure;
+    "./crafting_interpreters_test_files";
     reference_closure_multiple_times,
     nested_closure,
     reuse_closure_slot,
@@ -267,7 +307,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     constructor;
+    "./crafting_interpreters_test_files";
     return_value,
     return_in_nested_function,
     default,
@@ -282,7 +324,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     field;
+    "./crafting_interpreters_test_files";
     get_on_class,
     get_on_function,
     get_on_num,
@@ -307,7 +351,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     call;
+    "./crafting_interpreters_test_files";
     object,
     string,
     num,
@@ -316,7 +362,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     number;
+    "./crafting_interpreters_test_files";
     leading_dot,
     decimal_point_at_eof,
     literals,
@@ -325,7 +373,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     method;
+    "./crafting_interpreters_test_files";
     empty_block,
     too_many_parameters,
     refer_to_name,
@@ -338,7 +388,9 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     this;
+    "./crafting_interpreters_test_files";
     nested_closure,
     nested_class,
     this_at_top_level,
@@ -348,11 +400,19 @@ test_dir!(
 );
 
 test_dir!(
+    base;
     string;
+    "./crafting_interpreters_test_files";
     multiline,
     error_after_multiline,
     literals,
     unterminated,
 );
 
-test_dir!(empty_file, precedence, unexpected_character,);
+test_dir!(
+    base;
+    "./crafting_interpreters_test_files";
+    empty_file,
+    precedence,
+    unexpected_character,
+);

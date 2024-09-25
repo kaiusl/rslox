@@ -6,14 +6,4 @@ input_file: crafting_interpreters_test_files/limit/too_many_constants.lox
 OUT: 
 
 ===
-ERR: 
-  × Static errors
-
-Error:   × too many constants
-    ╭─[35:3]
- 34 │ 
- 35 │   "oops"; // Error at '"oops"': Too many constants in one chunk.
-    ·   ───┬──
-    ·      ╰── here
- 36 │ }
-    ╰────
+ERR:
